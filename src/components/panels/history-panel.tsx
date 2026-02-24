@@ -208,7 +208,7 @@ function WaveformPlayer({ audioFileName }: { audioFileName: string }) {
   if (!loaded) return null;
 
   return (
-    <div className="mt-2 flex items-center gap-2">
+    <div className="mt-2 flex items-center gap-2 overflow-hidden">
       <button
         type="button"
         onClick={handleClick}
@@ -226,11 +226,11 @@ function WaveformPlayer({ audioFileName }: { audioFileName: string }) {
           </svg>
         )}
       </button>
-      <div ref={containerRef} className="flex-1 min-w-0">
+      <div ref={containerRef} className="flex-1 min-w-0 overflow-hidden">
         <canvas
           ref={canvasRef}
           style={{ width: "100%", height: HEIGHT }}
-          className="block"
+          className="block max-w-full"
         />
       </div>
     </div>
@@ -338,7 +338,7 @@ function HistoryCard({
         <span className="text-gray-300 dark:text-gray-600">|</span>
         {entry.modelId && (
           <>
-            <span className="px-1.5 py-0.5 rounded bg-black/[0.06] dark:bg-white/[0.08] text-gray-700 dark:text-gray-300 text-[10px] font-medium">
+            <span className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-[10px] font-medium">
               {entry.modelId}
             </span>
             <span className="text-gray-300 dark:text-gray-600">|</span>
