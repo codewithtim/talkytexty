@@ -2,11 +2,11 @@
 
 ## Summary
 
-Add persistent storage and a browsable UI for past transcriptions. Every completed transcription is automatically saved with metadata (timestamp, model, duration, text). Users can view, search, copy, and delete history entries from a new "History" sidebar section.
+Persistent storage and a browsable UI for past transcriptions. Every completed transcription is automatically saved with metadata (timestamp, model, duration, text) and its audio recording as a WAV file. Users can view, search, copy, play back audio with a waveform visualization, and delete history entries from the "History" sidebar section.
 
 ## Context
 
-Currently, transcription results are ephemeral — `lastResult` in the `useRecording` hook is replaced on every new transcription and lost when the app restarts. There is no record of what was transcribed, when, or which model was used. The only persistent storage today is `preferences.json`.
+Previously, transcription results were ephemeral — `lastResult` in the `useRecording` hook was replaced on every new transcription and lost when the app restarted. There was no record of what was transcribed, when, or which model was used.
 
 ## Data Model
 
@@ -21,73 +21,58 @@ Currently, transcription results are ephemeral — `lastResult` in the `useRecor
 | `recording_duration_ms` | `u64` | How long the user recorded audio |
 | `transcription_duration_ms` | `u64` | How long the engine took to transcribe |
 | `audio_device` | `Option<String>` | Mic used (null = system default) |
+| `audio_file_name` | `Option<String>` | Filename of the saved WAV recording (null if save failed) |
 
 ### Storage
 
-Use a single JSON file at `{app_data_dir}/history.json` containing an array of entries, ordered newest-first. JSON keeps the stack simple (no SQLite dependency), matches the existing preferences pattern, and is sufficient for the expected volume (hundreds to low thousands of entries).
+History entries are stored in `{app_data_dir}/history.json` as a JSON array, ordered newest-first. Audio recordings are stored as 16kHz mono WAV files in `{app_data_dir}/recordings/`, written using the `hound` crate.
 
-If the file grows beyond ~5,000 entries, the oldest entries are automatically pruned on save.
+If the file grows beyond 5,000 entries, the oldest entries are automatically pruned on save. Deleting an entry also deletes its associated audio file. Clearing all history deletes the entire `recordings/` directory.
 
 ```
 {app_data_dir}/
 ├── preferences.json     (existing)
-└── history.json          (new)
+├── history.json
+└── recordings/
+    ├── {uuid}.wav
+    └── ...
 ```
 
-## Changes
+## Implementation
 
-### Phase 1: Rust Storage Layer
+### Rust Storage Layer — `src-tauri/src/history/mod.rs`
 
-**`src-tauri/src/history/mod.rs`** (new module)
-
-- `HistoryEntry` struct with serde derive
-- `load_history(app_data_dir) -> Vec<HistoryEntry>` — reads + deserialises JSON file, returns empty vec if missing
+- `HistoryEntry` struct with serde derive (camelCase serialization)
+- `load_history(app_data_dir)` — reads + deserialises JSON file, returns empty vec if missing
 - `save_history(app_data_dir, entries)` — serialises and writes to disk, prunes to 5,000 max
 - `add_entry(app_data_dir, entry)` — loads, prepends entry, saves
-- `delete_entry(app_data_dir, id)` — loads, removes by ID, saves
-- `clear_history(app_data_dir)` — writes empty array
+- `delete_entry(app_data_dir, id)` — loads, deletes associated audio file, removes by ID, saves
+- `clear_history(app_data_dir)` — deletes recordings directory, writes empty array
+- `save_audio_wav(app_data_dir, id, samples, sample_rate)` — writes f32 samples to a 16-bit WAV file via `hound`
+- `load_audio_bytes(app_data_dir, file_name)` — reads raw WAV bytes for frontend playback
+- `delete_audio_file(app_data_dir, file_name)` — removes a single WAV file
 
-**`src-tauri/src/lib.rs`**
-
-- Add `pub mod history;`
-
-### Phase 2: Tauri Commands
-
-**`src-tauri/src/commands/history_commands.rs`** (new file)
+### Tauri Commands — `src-tauri/src/commands/history_commands.rs`
 
 | Command | Args | Returns | Description |
 |---------|------|---------|-------------|
 | `list_history` | — | `Vec<HistoryEntry>` | Return all entries (newest first) |
-| `delete_history_entry` | `id: String` | `()` | Remove a single entry |
-| `clear_history` | — | `()` | Delete all history |
+| `delete_history_entry` | `id: String` | `()` | Remove entry and its audio file |
+| `clear_history` | — | `()` | Delete all history and recordings |
+| `get_history_audio` | `file_name: String` | `Vec<u8>` | Return raw WAV bytes for playback |
 
-**`src-tauri/src/commands/mod.rs`** — add `pub mod history_commands;`
+### History Capture — `src-tauri/src/commands/audio_commands.rs`
 
-**`src-tauri/src/lib.rs`** — register all three commands in `invoke_handler`
+In `stop_recording`, after successful transcription:
 
-### Phase 3: Capture History on Transcription
+1. Recording duration is calculated from `recording_started_at` (stored in `AppState` on `start_recording`)
+2. Audio is resampled to 16kHz and saved as WAV via `history::save_audio_wav`
+3. A `HistoryEntry` is constructed with all metadata including `audio_file_name`
+4. Entry is prepended to history via `history::add_entry`
 
-**`src-tauri/src/commands/audio_commands.rs`**
+This is a backend side-effect — no changes to the return type or frontend recording flow.
 
-Modify `stop_recording`:
-
-1. Record `started_at` timestamp when `start_recording` is called (store in `AppState` alongside `recording_active`)
-2. After successful transcription, construct a `HistoryEntry` from:
-   - `session_id` (already generated)
-   - `Utc::now()` for `created_at`
-   - `text` from engine result
-   - `active_model_id` from preferences
-   - Recording duration = `now - started_at`
-   - `duration_ms` already measured for transcription time
-   - `selected_audio_device` from preferences
-3. Call `history::add_entry(app_data_dir, entry)`
-4. No changes to the return type or frontend recording flow — history saving is a backend side-effect
-
-**`src-tauri/src/lib.rs`** — add `recording_started_at: Mutex<Option<Instant>>` to `AppState`
-
-### Phase 4: TypeScript Types
-
-**`src/types/index.ts`**
+### TypeScript Types — `src/types/index.ts`
 
 ```typescript
 export interface HistoryEntry {
@@ -98,56 +83,59 @@ export interface HistoryEntry {
   recordingDurationMs: number;
   transcriptionDurationMs: number;
   audioDevice: string | null;
+  audioFileName: string | null;
 }
 ```
 
-**`src/types/index.ts`** — add `"history"` to `SettingsSection` union type
+`SettingsSection` union type includes `"history"`.
 
-### Phase 5: Frontend Hook
-
-**`src/hooks/use-history.ts`** (new file)
+### Frontend Hook — `src/hooks/use-history.ts`
 
 ```typescript
-function useHistory() {
-  const [entries, setEntries] = useState<HistoryEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Load on mount via invoke("list_history")
-  // deleteEntry(id) — invoke("delete_history_entry") + update local state
-  // clearAll() — invoke("clear_history") + update local state
-  // reload() — re-fetch from backend
-
-  return { entries, loading, deleteEntry, clearAll, reload };
+function useHistory(): {
+  entries: HistoryEntry[];
+  loading: boolean;
+  error: string | null;
+  deleteEntry: (id: string) => Promise<void>;
+  clearAll: () => Promise<void>;
+  reload: () => Promise<void>;
 }
 ```
 
-### Phase 6: History Panel UI
+Loads entries on mount via `invoke("list_history")`. Delete and clear operations update local state optimistically after the backend call succeeds.
 
-**`src/components/panels/history-panel.tsx`** (new file)
+### History Panel UI — `src/components/panels/history-panel.tsx`
 
-Layout:
-- Top bar: search input (filters entries client-side by text content) + "Clear All" button with confirmation
-- Scrollable list of history cards, each showing:
-  - Truncated transcription text (first ~2 lines)
-  - Relative timestamp ("2 min ago", "Yesterday")
-  - Model name badge
-  - Recording duration
-  - Actions: copy text to clipboard, delete entry
-- Empty state when no history exists ("No transcriptions yet")
+**HistoryCard** — displays a single history entry:
+- Truncated transcription text (expandable if > 120 chars)
+- Copy to clipboard and delete buttons
+- Relative timestamp, model badge (neutral gray pill), recording duration, transcription duration
+- Waveform player (when audio is available)
 
-Uses `SettingsGroup` for visual consistency with other panels.
+**WaveformPlayer** — canvas-based audio waveform visualization:
+- On mount: fetches WAV bytes via `invoke("get_history_audio")`, decodes with Web Audio API `decodeAudioData()`, extracts ~80 amplitude peaks, caches a blob URL for playback
+- DPR-aware canvas rendering: ~80 bars, 32px tall, 1px gaps, rounded rects, centered horizontally
+- Two-tone coloring: bars left of playback cursor = white (dark mode) / near-black (light mode), bars right = gray
+- Play/pause button to the left of the waveform
+- During playback: `requestAnimationFrame` loop polls `audio.currentTime / audio.duration` and sweeps the played color across the bars
+- On playback end or stop: resets progress to 0, all bars return to gray
+- Container uses `ResizeObserver` for responsive width, canvas CSS is always `width: 100%`
 
-### Phase 7: Wire Into App
+**HistoryPanel** — the full panel view:
+- Search input for filtering entries client-side by text content
+- Refresh button to reload from backend
+- "Clear All" button with confirmation prompt
+- Scrollable list of `HistoryCard` components
+- Empty state when no history exists
+- Wrapped in `SettingsGroup` for visual consistency with other panels
 
-**`src/App.tsx`**
+### App Wiring
 
-- Import `HistoryPanel`, add to `PANELS` record
-- Add `"/history": "history"` to `ROUTE_TO_SECTION`
-
-**`src/components/sidebar.tsx`**
-
-- Add "History" item to `SIDEBAR_ITEMS` array (between General and Models, or as the first item)
-- Icon: clock/history icon with a green background
+- **`src/App.tsx`** — imports `HistoryPanel`, adds to `PANELS` record
+- **`src/components/sidebar.tsx`** — "History" nav item with green clock icon (`bg-green-500`)
+- **`src-tauri/Cargo.toml`** — `hound` dependency for WAV writing
+- **`src-tauri/src/commands/mod.rs`** — `pub mod history_commands;`
+- **`src-tauri/src/lib.rs`** — `pub mod history;`, registers all four history commands, adds `recording_started_at: Mutex<Option<Instant>>` to `AppState`
 
 ## Files Summary
 
@@ -157,6 +145,7 @@ Uses `SettingsGroup` for visual consistency with other panels.
 | Create | `src-tauri/src/commands/history_commands.rs` |
 | Create | `src/hooks/use-history.ts` |
 | Create | `src/components/panels/history-panel.tsx` |
+| Edit | `src-tauri/Cargo.toml` |
 | Edit | `src-tauri/src/lib.rs` |
 | Edit | `src-tauri/src/commands/mod.rs` |
 | Edit | `src-tauri/src/commands/audio_commands.rs` |
@@ -164,18 +153,10 @@ Uses `SettingsGroup` for visual consistency with other panels.
 | Edit | `src/App.tsx` |
 | Edit | `src/components/sidebar.tsx` |
 
-## Out of Scope (Future Considerations)
+## Future Considerations
 
-- **Audio playback** — storing and replaying the original audio recording
 - **Edit and re-inject** — modifying a past transcription and injecting it again
 - **Export** — exporting history as CSV/JSON
 - **SQLite migration** — only needed if JSON performance degrades at scale
 - **Cloud sync** — syncing history across devices
 - **Favourite/pin entries** — bookmarking frequently referenced transcriptions
-
-## Verification
-
-- `cargo check` — Rust compiles with new module + commands
-- `npx tsc --noEmit` — TypeScript compiles with new types + components
-- `pnpm test --run` — existing tests still pass
-- Manual: complete a transcription, open History panel, verify entry appears with correct metadata. Delete an entry, clear all, verify search filtering works.
