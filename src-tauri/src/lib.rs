@@ -82,7 +82,49 @@ pub fn update_tray_recording_state(app: &tauri::AppHandle, is_recording: bool) {
         if let Ok(menu) = build_tray_menu(app, is_recording) {
             let _ = tray.set_menu(Some(menu));
         }
+
+        // Swap icon: normal icon or icon with red recording dot
+        let icon = if is_recording {
+            recording_icon()
+        } else {
+            Image::from_bytes(include_bytes!("../icons/32x32.png")).ok()
+        };
+        if let Some(icon) = icon {
+            let _ = tray.set_icon(Some(icon));
+        }
     }
+}
+
+/// Create a copy of the tray icon with a red recording dot in the bottom-right corner.
+fn recording_icon() -> Option<Image<'static>> {
+    let base = Image::from_bytes(include_bytes!("../icons/32x32.png")).ok()?;
+    let width = base.width();
+    let height = base.height();
+    let mut rgba = base.rgba().to_vec();
+
+    // Red dot parameters — bottom-right badge
+    let dot_radius = 5.0_f64;
+    let cx = width as f64 - dot_radius - 1.0;
+    let cy = height as f64 - dot_radius - 1.0;
+
+    for y in 0..height {
+        for x in 0..width {
+            let dx = x as f64 - cx;
+            let dy = y as f64 - cy;
+            let dist = (dx * dx + dy * dy).sqrt();
+
+            if dist <= dot_radius {
+                let idx = ((y * width + x) * 4) as usize;
+                // Apple system red #FF3B30
+                rgba[idx] = 0xFF;
+                rgba[idx + 1] = 0x3B;
+                rgba[idx + 2] = 0x30;
+                rgba[idx + 3] = 0xFF;
+            }
+        }
+    }
+
+    Some(Image::new_owned(rgba, width, height))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
