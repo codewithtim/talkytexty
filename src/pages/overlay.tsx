@@ -13,18 +13,20 @@ export function OverlayPage() {
   const [visualization, setVisualization] = useState<VisualizationStyle>("Bars");
   const [processingAnimation, setProcessingAnimation] = useState<ProcessingAnimation>("Pulse");
   const [hotkeyDisplay, setHotkeyDisplay] = useState<string>("");
+  const [micName, setMicName] = useState<string>("Default");
   const [isDragging, setIsDragging] = useState(false);
   const { amplitudes } = useAudioStream();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Extract display hotkey from preferences
-  const extractHotkey = (prefs: UserPreferences) => {
+  // Extract display hotkey and mic name from preferences
+  const extractPrefsDisplay = (prefs: UserPreferences) => {
     const mode = prefs.recordingMode;
     const action = mode === "PushToTalk" ? "PushToTalk" : "ToggleRecording";
     const binding = prefs.hotkeys.find((h) => h.action === action && h.enabled);
     if (binding) {
       setHotkeyDisplay(formatHotkeyForDisplay(binding.keyCombination));
     }
+    setMicName(prefs.selectedAudioDevice ?? "Default");
   };
 
   // Fetch preferences on mount
@@ -33,7 +35,7 @@ export function OverlayPage() {
       .then((prefs) => {
         setVisualization(prefs.overlayVisualization);
         setProcessingAnimation(prefs.overlayProcessingAnimation);
-        extractHotkey(prefs);
+        extractPrefsDisplay(prefs);
       })
       .catch(() => {});
   }, []);
@@ -46,7 +48,7 @@ export function OverlayPage() {
         .then((prefs) => {
           setVisualization(prefs.overlayVisualization);
           setProcessingAnimation(prefs.overlayProcessingAnimation);
-          extractHotkey(prefs);
+          extractPrefsDisplay(prefs);
         })
         .catch(() => {});
       setVisible(true);
@@ -121,6 +123,7 @@ export function OverlayPage() {
           visualization={visualization}
           processingAnimation={processingAnimation}
           hotkey={hotkeyDisplay || undefined}
+          micName={micName}
         />
       </div>
     </div>

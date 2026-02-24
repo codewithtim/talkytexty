@@ -12,10 +12,11 @@ interface RecordingPillProps {
   visualization?: VisualizationStyle;
   processingAnimation?: ProcessingAnimation;
   hotkey?: string;
+  micName?: string;
 }
 
-const VIZ_WIDTH = 240;
-const VIZ_HEIGHT = 56;
+const VIZ_WIDTH = 440;
+const VIZ_HEIGHT = 48;
 
 export function RecordingPill({
   amplitudes,
@@ -24,8 +25,8 @@ export function RecordingPill({
   visualization = "Bars",
   processingAnimation = "Pulse",
   hotkey,
+  micName,
 }: RecordingPillProps) {
-  const label = isProcessing ? "Processing..." : "Recording";
   const lastAmplitudesRef = useRef<number[]>([]);
 
   // Capture last amplitudes while recording for FrozenFrame
@@ -47,7 +48,6 @@ export function RecordingPill({
       );
     }
 
-    // Processing state
     if (processingAnimation === "FrozenFrame") {
       return (
         <FrozenFrameAnimation
@@ -63,37 +63,43 @@ export function RecordingPill({
       return <TypingParrotAnimation width={VIZ_WIDTH} height={VIZ_HEIGHT} />;
     }
 
-    // Default: Pulse
     return <PulseAnimation width={VIZ_WIDTH} height={VIZ_HEIGHT} />;
   };
 
   return (
-    <div className="rounded-2xl bg-gray-900/90 backdrop-blur-md px-5 py-4 flex flex-col items-center gap-3 shadow-lg border border-gray-700/50">
-      {/* Visualization area on top */}
+    <div className="rounded-2xl bg-gray-900/90 backdrop-blur-md flex flex-col shadow-lg border border-gray-700/50 overflow-hidden">
+      {/* Visualization area */}
       <div
         style={{ width: VIZ_WIDTH, height: VIZ_HEIGHT }}
-        className="shrink-0 rounded-lg overflow-hidden"
+        className="shrink-0 px-3 pt-3"
       >
         {renderVisualization()}
       </div>
 
-      {/* Status row: dot + hotkey on the same line */}
-      <div className="flex items-center gap-2">
-        <div
-          className={`w-3 h-3 rounded-full shrink-0 ${
-            isRecording
-              ? "bg-red-500 animate-pulse"
-              : "bg-yellow-500 animate-pulse"
-          }`}
-        />
-        {isProcessing && (
-          <span className="text-white text-base font-medium whitespace-nowrap">
-            {label}
-          </span>
-        )}
-        {hotkey && isRecording && (
-          <span className="text-gray-400 text-xs font-mono">{hotkey}</span>
-        )}
+      {/* Bottom toolbar */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-700/40 mt-2">
+        {/* Left: mic info */}
+        <div className="flex items-center gap-2 text-gray-400 text-xs">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+          </svg>
+          <span>{micName ?? "Default"}</span>
+        </div>
+
+        {/* Right: action labels + hotkey badges */}
+        <div className="flex items-center gap-3 text-xs">
+          {isRecording && (
+            <>
+              <span className="text-gray-300">Stop</span>
+              {hotkey && <span className="kbd">{hotkey}</span>}
+            </>
+          )}
+          {isProcessing && (
+            <span className="text-yellow-400 font-medium">Processing...</span>
+          )}
+          <span className="text-gray-400">Cancel</span>
+          <span className="kbd">esc</span>
+        </div>
       </div>
     </div>
   );

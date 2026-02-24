@@ -5752,6 +5752,8 @@ dependencies = [
  "futures-util",
  "hf-hub",
  "log",
+ "objc2",
+ "objc2-app-kit",
  "parakeet-rs",
  "reqwest 0.12.28",
  "rubato",

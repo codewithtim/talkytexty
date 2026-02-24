@@ -259,6 +259,20 @@ pub fn run() {
                 active_capture: Mutex::new(None),
             });
 
+            // Always hide the zoom (green) traffic-light button on the main window
+            #[cfg(target_os = "macos")]
+            if let Some(main_win) = app.get_webview_window("main") {
+                if let Ok(ns_window_ptr) = main_win.ns_window() {
+                    unsafe {
+                        use objc2_app_kit::{NSWindow, NSWindowButton};
+                        let ns_win: &NSWindow = &*(ns_window_ptr as *const NSWindow);
+                        if let Some(btn) = ns_win.standardWindowButton(NSWindowButton::ZoomButton) {
+                            btn.setHidden(true);
+                        }
+                    }
+                }
+            }
+
             // Configure overlay window runtime properties
             if let Some(overlay) = app.get_webview_window("recording-overlay") {
                 // Position overlay: use saved custom position if available, else preset
@@ -399,6 +413,7 @@ pub fn run() {
             commands::injection_commands::inject_text,
             commands::injection_commands::list_windows,
             commands::injection_commands::copy_to_clipboard,
+            commands::window_commands::set_traffic_lights_visible,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

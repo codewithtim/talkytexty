@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { isTauri } from "@tauri-apps/api/core";
+import { isTauri, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { OverlayPage } from "./pages/overlay";
 import { PickerPage } from "./pages/picker";
 import { useRecording } from "./hooks/use-recording";
 import { Sidebar } from "./components/sidebar";
+import { StatusBar } from "./components/status-bar";
 import { GeneralPanel } from "./components/panels/general-panel";
 import { ModelsPanel } from "./components/panels/models-panel";
 import { HotkeysPanel } from "./components/panels/hotkeys-panel";
@@ -47,6 +48,12 @@ function RecordingListener() {
 
 function MainWindow() {
   const [activeSection, setActiveSection] = useState<SettingsSection>("general");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Hide macOS minimize/maximize traffic-light buttons when sidebar is collapsed
+  useEffect(() => {
+    void invoke("set_traffic_lights_visible", { visible: !sidebarCollapsed });
+  }, [sidebarCollapsed]);
 
   // Listen for tray navigation events and map routes to sections
   useEffect(() => {
@@ -69,12 +76,15 @@ function MainWindow() {
   }, []);
 
   return (
-    <div className="flex h-screen bg-white dark:bg-[#1e1e1e]">
+    <div className="flex h-screen bg-[#f6f6f6]/95 dark:bg-[#2b2b2f]/[0.97] backdrop-blur-3xl backdrop-saturate-150 rounded-lg overflow-hidden">
       <RecordingListener />
-      <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
-      <main className="flex-1 overflow-y-auto p-8">
-        {PANELS[activeSection]}
-      </main>
+      <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} collapsed={sidebarCollapsed} />
+      <div className="flex-1 flex flex-col min-h-0">
+        <StatusBar onToggleSidebar={() => setSidebarCollapsed(c => !c)} sidebarCollapsed={sidebarCollapsed} />
+        <main className="flex-1 overflow-y-auto p-8">
+          {PANELS[activeSection]}
+        </main>
+      </div>
     </div>
   );
 }

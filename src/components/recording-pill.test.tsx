@@ -31,19 +31,18 @@ afterEach(() => {
 });
 
 describe("RecordingPill", () => {
-  it("shows red dot without text label when recording", () => {
-    const { container } = render(
+  it("shows Stop label when recording", () => {
+    render(
       <RecordingPill
         amplitudes={[0.5]}
         isRecording={true}
         isProcessing={false}
       />,
     );
-    expect(container.querySelector(".bg-red-500")).toBeInTheDocument();
-    expect(screen.queryByText("Recording")).not.toBeInTheDocument();
+    expect(screen.getByText("Stop")).toBeInTheDocument();
   });
 
-  it("renders with 'Processing...' label when processing", () => {
+  it("shows Processing label when processing", () => {
     render(
       <RecordingPill amplitudes={[]} isRecording={false} isProcessing={true} />,
     );
@@ -89,35 +88,16 @@ describe("RecordingPill", () => {
     expect(canvas).toBeInTheDocument();
   });
 
-  it("shows red pulsing indicator when recording", () => {
-    const { container } = render(
-      <RecordingPill amplitudes={[]} isRecording={true} isProcessing={false} />,
-    );
-    const dot = container.querySelector(".bg-red-500");
-    expect(dot).toBeInTheDocument();
-    expect(dot).toHaveClass("animate-pulse");
-  });
-
-  it("shows yellow pulsing indicator when processing", () => {
-    const { container } = render(
-      <RecordingPill amplitudes={[]} isRecording={false} isProcessing={true} />,
-    );
-    const dot = container.querySelector(".bg-yellow-500");
-    expect(dot).toBeInTheDocument();
-    expect(dot).toHaveClass("animate-pulse");
-  });
-
-  it("renders vertical layout with rounded-2xl", () => {
+  it("renders with rounded-2xl container", () => {
     const { container } = render(
       <RecordingPill amplitudes={[]} isRecording={true} isProcessing={false} />,
     );
     const pill = container.firstChild as HTMLElement;
     expect(pill).toHaveClass("rounded-2xl");
     expect(pill).toHaveClass("flex-col");
-    expect(pill).toHaveClass("items-center");
   });
 
-  it("displays hotkey next to red dot when recording", () => {
+  it("shows hotkey badge in toolbar when recording", () => {
     render(
       <RecordingPill
         amplitudes={[]}
@@ -129,10 +109,30 @@ describe("RecordingPill", () => {
     expect(screen.getByText("⌘⇧Space")).toBeInTheDocument();
   });
 
-  it("does not display hotkey when not provided", () => {
+  it("always shows Cancel and esc in toolbar", () => {
     render(
       <RecordingPill amplitudes={[]} isRecording={true} isProcessing={false} />,
     );
-    expect(screen.queryByText("⌘⇧Space", { exact: false })).not.toBeInTheDocument();
+    expect(screen.getByText("Cancel")).toBeInTheDocument();
+    expect(screen.getByText("esc")).toBeInTheDocument();
+  });
+
+  it("shows mic name in toolbar", () => {
+    render(
+      <RecordingPill
+        amplitudes={[]}
+        isRecording={true}
+        isProcessing={false}
+        micName="My Microphone"
+      />,
+    );
+    expect(screen.getByText("My Microphone")).toBeInTheDocument();
+  });
+
+  it("shows Default when no mic name provided", () => {
+    render(
+      <RecordingPill amplitudes={[]} isRecording={true} isProcessing={false} />,
+    );
+    expect(screen.getByText("Default")).toBeInTheDocument();
   });
 });

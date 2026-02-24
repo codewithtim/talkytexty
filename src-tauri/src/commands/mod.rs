@@ -3,6 +3,7 @@ pub mod injection_commands;
 pub mod model_commands;
 pub mod preferences_commands;
 pub mod system_commands;
+pub mod window_commands;
 
 use serde::Serialize;
 
