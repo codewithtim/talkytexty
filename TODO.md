@@ -1,0 +1,14 @@
+- [X] Model selection - can't see whats active in the option Model
+- [X] Model selection needs model names, 
+- [X] Download doesn't show it downloading, can spam the button
+- [X] Push to talk doesn't work
+- [X] Target window selection is terrible
+- [X] Transcription performance needs fixing
+- [X] Add menu icon for recording etc
+- [ ] UI needs a lot of work
+- [ ] Make the model downloading a progress bar rather than loading spinner
+- [ ] options to add new models
+- [ ] Come up with a name and logo
+- [ ] Product website
+- [ ] Test distro releases 
+- [ ] Allow different hotkeys for window selection

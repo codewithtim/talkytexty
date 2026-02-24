@@ -1,0 +1,76 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "text-to-code",
+  "version": "0.1.0",
+  "identifier": "com.timknight.text-to-code",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Text to Code - Settings",
+        "width": 800,
+        "height": 600,
+        "visible": true
+      },
+      {
+        "label": "recording-overlay",
+        "title": "",
+        "url": "/overlay",
+        "width": 340,
+        "height": 180,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "focusable": false,
+        "skipTaskbar": true,
+        "resizable": false
+      },
+      {
+        "label": "window-picker",
+        "title": "",
+        "url": "/picker",
+        "width": 640,
+        "height": 140,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "focusable": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "frameworks": [],
+      "minimumSystemVersion": "10.15",
+      "exceptionDomain": "",
+      "signingIdentity": null,
+      "providerShortName": null,
+      "entitlements": null
+    }
+  },
+  "plugins": {}
+}
