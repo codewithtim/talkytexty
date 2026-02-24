@@ -1,6 +1,17 @@
 // Domain types matching Rust backend (data-model.md)
 
-export type SettingsSection = "general" | "models" | "hotkeys" | "about";
+export type SettingsSection = "general" | "history" | "models" | "hotkeys" | "about";
+
+export interface HistoryEntry {
+  id: string;
+  createdAt: string;
+  text: string;
+  modelId: string;
+  recordingDurationMs: number;
+  transcriptionDurationMs: number;
+  audioDevice: string | null;
+  audioFileName: string | null;
+}
 
 export interface TranscriptionModel {
   id: string;

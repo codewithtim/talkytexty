@@ -1,5 +1,6 @@
 pub mod audio;
 pub mod commands;
+pub mod history;
 pub mod hotkeys;
 pub mod injection;
 pub mod preferences;
@@ -27,6 +28,7 @@ pub struct AppState {
     pub recording_active: RwLock<bool>,
     pub engine: RwLock<Option<Box<dyn TranscriptionEngine>>>,
     pub active_capture: Mutex<Option<AudioCapture>>,
+    pub recording_started_at: Mutex<Option<std::time::Instant>>,
 }
 
 fn build_tray_menu(
@@ -257,6 +259,7 @@ pub fn run() {
                 recording_active: RwLock::new(false),
                 engine: RwLock::new(initial_engine),
                 active_capture: Mutex::new(None),
+                recording_started_at: Mutex::new(None),
             });
 
             // Always hide the zoom (green) traffic-light button on the main window
@@ -414,6 +417,10 @@ pub fn run() {
             commands::injection_commands::list_windows,
             commands::injection_commands::copy_to_clipboard,
             commands::window_commands::set_traffic_lights_visible,
+            commands::history_commands::list_history,
+            commands::history_commands::delete_history_entry,
+            commands::history_commands::clear_history,
+            commands::history_commands::get_history_audio,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

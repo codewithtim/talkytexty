@@ -25,6 +25,7 @@ parakeet-rs = { version = "0.3", features = ["cpu"] }
 # Audio capture and processing
 cpal = "0.17"
 rubato = "0.15"
+hound = "3"
 
 # Model downloading
 hf-hub = "0.4"

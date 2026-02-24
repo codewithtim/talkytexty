@@ -1,4 +1,5 @@
 pub mod audio_commands;
+pub mod history_commands;
 pub mod injection_commands;
 pub mod model_commands;
 pub mod preferences_commands;

@@ -113,6 +113,14 @@ pub async fn start_recording(
             .map_err(|e| CommandError::new("LockError", e.to_string()))?;
         *recording = true;
     }
+
+    // Record the start time for duration tracking
+    {
+        let mut started_at = state.recording_started_at.lock()
+            .map_err(|e| CommandError::new("LockError", e.to_string()))?;
+        *started_at = Some(std::time::Instant::now());
+    }
+
     eprintln!("[start_recording] Recording active, session: {}", session_id);
 
     let _ = on_event.send(AudioEvent::RecordingStarted);
@@ -155,7 +163,13 @@ pub async fn stop_recording(
         capture.stop()
     };
 
-    // Mark recording as stopped
+    // Mark recording as stopped and capture duration
+    let recording_duration_ms = {
+        let mut started_at = state.recording_started_at.lock()
+            .map_err(|e| CommandError::new("LockError", e.to_string()))?;
+        started_at.take().map(|t| t.elapsed().as_millis() as u64).unwrap_or(0)
+    };
+
     {
         let mut recording = state
             .recording_active
@@ -182,6 +196,14 @@ pub async fn stop_recording(
     let audio_16khz = resample_to_16khz(&audio_buffer, sample_rate)
         .map_err(|e| CommandError::new("TranscriptionFailed", format!("Resampling failed: {}", e)))?;
 
+    // Generate session ID before saving audio so we can use it as filename
+    let session_id = uuid::Uuid::new_v4().to_string();
+
+    // Save audio as WAV for history playback
+    let audio_file_name = crate::history::save_audio_wav(
+        &state.app_data_dir, &session_id, &audio_16khz, 16000,
+    ).ok();
+
     // Transcribe
     let text = {
         let engine = state
@@ -197,12 +219,29 @@ pub async fn stop_recording(
     };
 
     let duration_ms = start_time.elapsed().as_millis() as u64;
-    let session_id = uuid::Uuid::new_v4().to_string();
 
     let _ = on_event.send(AudioEvent::TranscriptionCompleted {
         text: text.clone(),
     });
     let _ = app.emit("transcription-completed", ());
+
+    // Save to history
+    {
+        let prefs = state.preferences.read()
+            .map_err(|e| CommandError::new("LockError", e.to_string()))?;
+        let entry = crate::history::HistoryEntry {
+            id: session_id.clone(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            text: text.clone(),
+            model_id: prefs.active_model_id.clone().unwrap_or_default(),
+            recording_duration_ms,
+            transcription_duration_ms: duration_ms,
+            audio_device: prefs.selected_audio_device.clone(),
+            audio_file_name: audio_file_name.clone(),
+        };
+        drop(prefs);
+        let _ = crate::history::add_entry(&state.app_data_dir, &entry);
+    }
 
     // Hide the overlay window
     if let Some(overlay) = app.get_webview_window("recording-overlay") {

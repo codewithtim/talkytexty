@@ -24,6 +24,16 @@ const SIDEBAR_ITEMS: {
     ),
   },
   {
+    section: "history",
+    label: "History",
+    iconBg: "bg-green-500",
+    icon: (
+      <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+      </svg>
+    ),
+  },
+  {
     section: "models",
     label: "Models",
     iconBg: "bg-blue-500",
