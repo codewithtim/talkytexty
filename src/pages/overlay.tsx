@@ -5,13 +5,14 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { RecordingPill } from "@/components/recording-pill";
 import { useAudioStream } from "@/hooks/use-audio-stream";
 import { formatHotkeyForDisplay } from "@/utils/format-hotkey";
-import type { VisualizationStyle, ProcessingAnimation, UserPreferences } from "@/types";
+import type { VisualizationStyle, ProcessingAnimation, OverlayMode, UserPreferences } from "@/types";
 
 export function OverlayPage() {
   const [visible, setVisible] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [visualization, setVisualization] = useState<VisualizationStyle>("Bars");
   const [processingAnimation, setProcessingAnimation] = useState<ProcessingAnimation>("Pulse");
+  const [overlayMode, setOverlayMode] = useState<OverlayMode>("Full");
   const [hotkeyDisplay, setHotkeyDisplay] = useState<string>("");
   const [micName, setMicName] = useState<string>("Default");
   const [isDragging, setIsDragging] = useState(false);
@@ -35,6 +36,7 @@ export function OverlayPage() {
       .then((prefs) => {
         setVisualization(prefs.overlayVisualization);
         setProcessingAnimation(prefs.overlayProcessingAnimation);
+        setOverlayMode(prefs.overlayMode ?? "Full");
         extractPrefsDisplay(prefs);
       })
       .catch(() => {});
@@ -48,6 +50,7 @@ export function OverlayPage() {
         .then((prefs) => {
           setVisualization(prefs.overlayVisualization);
           setProcessingAnimation(prefs.overlayProcessingAnimation);
+          setOverlayMode(prefs.overlayMode ?? "Full");
           extractPrefsDisplay(prefs);
         })
         .catch(() => {});
@@ -122,6 +125,7 @@ export function OverlayPage() {
           isProcessing={processing}
           visualization={visualization}
           processingAnimation={processingAnimation}
+          overlayMode={overlayMode}
           hotkey={hotkeyDisplay || undefined}
           micName={micName}
         />

@@ -16,6 +16,8 @@ pub struct UserPreferences {
     #[serde(default)]
     pub overlay_processing_animation: ProcessingAnimation,
     #[serde(default)]
+    pub overlay_mode: OverlayMode,
+    #[serde(default)]
     pub overlay_custom_position: Option<OverlayCustomPosition>,
     #[serde(default)]
     pub selected_audio_device: Option<String>,
@@ -77,6 +79,19 @@ pub enum ProcessingAnimation {
     Pulse,
     FrozenFrame,
     TypingParrot,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum OverlayMode {
+    None,
+    Full,
+    Mini,
+}
+
+impl Default for OverlayMode {
+    fn default() -> Self {
+        OverlayMode::Full
+    }
 }
 
 impl Default for ProcessingAnimation {
@@ -193,6 +208,7 @@ impl Default for UserPreferences {
             overlay_opacity: 0.9,
             overlay_visualization: VisualizationStyle::Bars,
             overlay_processing_animation: ProcessingAnimation::Pulse,
+            overlay_mode: OverlayMode::Full,
             overlay_custom_position: None,
             selected_audio_device: None,
             launch_at_login: false,

@@ -128,10 +128,18 @@ pub async fn start_recording(
     let _ = app.emit("recording-started", ());
     crate::update_tray_recording_state(&app, true);
 
-    // Show the overlay window
-    if let Some(overlay) = app.get_webview_window("recording-overlay") {
-        let _ = overlay.show();
-        eprintln!("[start_recording] Overlay window shown");
+    // Show the overlay window (unless mode is None)
+    {
+        let prefs = state.preferences.read()
+            .map_err(|e| CommandError::new("LockError", e.to_string()))?;
+        let show_overlay = !matches!(prefs.overlay_mode, crate::preferences::OverlayMode::None);
+        drop(prefs);
+        if show_overlay {
+            if let Some(overlay) = app.get_webview_window("recording-overlay") {
+                let _ = overlay.show();
+                eprintln!("[start_recording] Overlay window shown");
+            }
+        }
     }
 
     // Register Escape shortcut for cancel

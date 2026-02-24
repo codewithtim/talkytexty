@@ -7,10 +7,15 @@ import { CompanyBadge } from "@/components/company-badge";
 import { SettingsGroup, SettingsRow } from "@/components/settings-group";
 import { VISUALIZATIONS } from "@/components/visualizations";
 import { PROCESSING_ANIMATIONS } from "@/components/processing-animations";
-import type { VisualizationStyle, ProcessingAnimation, AudioDevice, TranscriptionModel, RecordingMode, HotkeyBinding } from "@/types";
+import type { VisualizationStyle, ProcessingAnimation, OverlayMode, AudioDevice, TranscriptionModel, RecordingMode, HotkeyBinding } from "@/types";
 
 const STYLE_KEYS: VisualizationStyle[] = ["Bars", "Sine", "Rainbow"];
 const PROCESSING_ANIM_KEYS: ProcessingAnimation[] = ["Pulse", "FrozenFrame", "TypingParrot"];
+const OVERLAY_MODES: { key: OverlayMode; label: string; description: string }[] = [
+  { key: "Full", label: "Full", description: "Waveform, mic info & hotkeys" },
+  { key: "Mini", label: "Mini", description: "Waveform only" },
+  { key: "None", label: "None", description: "No overlay" },
+];
 
 function useFakeAmplitudes(): number[] {
   const [amplitudes, setAmplitudes] = useState<number[]>(() =>
@@ -42,6 +47,7 @@ function useFakeAmplitudes(): number[] {
 export function GeneralPanel() {
   const { preferences, loading, error, updatePreferences } = usePreferences();
   const { models, setActiveModel, activatingModelId } = useModels();
+  const fakeAmplitudes = useFakeAmplitudes();
 
   const isWindowPicker = preferences?.targetMode.type === "WindowPicker";
 
@@ -157,6 +163,24 @@ export function GeneralPanel() {
         </SettingsRow>
       </SettingsGroup>
 
+      {/* Overlay Mode */}
+      <SettingsGroup title="Overlay Style">
+        <div className="px-4 py-3">
+          <OverlayModePicker
+            value={preferences?.overlayMode ?? "Full"}
+            amplitudes={fakeAmplitudes}
+            visualization={preferences?.overlayVisualization ?? "Bars"}
+            onChange={async (mode) => {
+              if (!preferences) return;
+              await updatePreferences({
+                ...preferences,
+                overlayMode: mode,
+              });
+            }}
+          />
+        </div>
+      </SettingsGroup>
+
       {/* Appearance */}
       <SettingsGroup title="Visualization">
         <div className="px-4 py-3">
@@ -258,6 +282,70 @@ function InlineTargetModeSelector({
 
 /* ---------- Sub-components (kept from original) ---------- */
 
+function OverlayModePicker({
+  value,
+  amplitudes,
+  visualization,
+  onChange,
+}: {
+  value: OverlayMode;
+  amplitudes: number[];
+  visualization: VisualizationStyle;
+  onChange: (mode: OverlayMode) => void;
+}) {
+  const vizEntry = VISUALIZATIONS[visualization];
+  const VizComponent = vizEntry.component;
+
+  return (
+    <div className="grid grid-cols-3 gap-3">
+      {OVERLAY_MODES.map(({ key, label }) => {
+        const isActive = value === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onChange(key)}
+            className={`rounded-lg p-3 flex flex-col items-center gap-2 transition-colors cursor-pointer ${
+              isActive
+                ? "bg-gray-100 dark:bg-gray-800 border-2 border-gray-400 dark:border-gray-500"
+                : "bg-white dark:bg-[#333] border border-[#e5e5e7] dark:border-[#444] hover:border-gray-400 dark:hover:border-gray-500"
+            }`}
+          >
+            <div className="rounded bg-[#f6f6f6] dark:bg-[#2b2b2f] w-full flex flex-col items-center overflow-hidden">
+              {key === "None" ? (
+                <div className="flex items-center justify-center h-10">
+                  <svg className="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12c1.292 4.338 5.31 7.5 10.066 7.5.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88" />
+                  </svg>
+                </div>
+              ) : key === "Mini" ? (
+                <div className="px-1.5 py-1.5">
+                  <VizComponent amplitudes={amplitudes} width={100} height={20} />
+                </div>
+              ) : (
+                <div className="flex flex-col w-full">
+                  <div className="px-1.5 pt-1.5">
+                    <VizComponent amplitudes={amplitudes} width={100} height={20} />
+                  </div>
+                  <div className="flex items-center justify-between px-2 py-1 mt-0.5 border-t border-black/[0.04] dark:border-white/[0.04]">
+                    <span className="text-[8px] text-gray-400 dark:text-gray-500">Default</span>
+                    <span className="text-[8px] text-gray-400 dark:text-gray-500">esc</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <span className={`text-xs font-medium ${
+              isActive ? "text-gray-900 dark:text-gray-100" : "text-gray-600 dark:text-gray-400"
+            }`}>
+              {label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function VisualizationPicker({
   value,
   onChange,
@@ -281,17 +369,17 @@ function VisualizationPicker({
             onClick={() => onChange(styleKey)}
             className={`rounded-lg p-3 flex flex-col items-center gap-2 transition-colors cursor-pointer ${
               isActive
-                ? "bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-500"
+                ? "bg-gray-100 dark:bg-gray-800 border-2 border-gray-400 dark:border-gray-500"
                 : "bg-white dark:bg-[#333] border border-[#e5e5e7] dark:border-[#444] hover:border-gray-400 dark:hover:border-gray-500"
             }`}
           >
-            <div className="rounded bg-gray-900/90 dark:bg-gray-900 p-1.5 w-full flex items-center justify-center">
+            <div className="rounded bg-[#f6f6f6] dark:bg-[#2b2b2f] p-1.5 w-full flex items-center justify-center">
               <VizComponent amplitudes={amplitudes} width={120} height={32} />
             </div>
             <span
               className={`text-xs font-medium ${
                 isActive
-                  ? "text-blue-600 dark:text-blue-400"
+                  ? "text-gray-900 dark:text-gray-100"
                   : "text-gray-600 dark:text-gray-400"
               }`}
             >
@@ -324,14 +412,14 @@ function ProcessingAnimationPicker({
             onClick={() => onChange(key)}
             className={`rounded-lg p-3 flex flex-col items-center gap-1 transition-colors cursor-pointer ${
               isActive
-                ? "bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-500"
+                ? "bg-gray-100 dark:bg-gray-800 border-2 border-gray-400 dark:border-gray-500"
                 : "bg-white dark:bg-[#333] border border-[#e5e5e7] dark:border-[#444] hover:border-gray-400 dark:hover:border-gray-500"
             }`}
           >
             <span
               className={`text-sm font-medium ${
                 isActive
-                  ? "text-blue-600 dark:text-blue-400"
+                  ? "text-gray-900 dark:text-gray-100"
                   : "text-gray-900 dark:text-gray-100"
               }`}
             >

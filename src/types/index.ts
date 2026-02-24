@@ -96,6 +96,7 @@ export interface UserPreferences {
   overlayOpacity: number;
   overlayVisualization: VisualizationStyle;
   overlayProcessingAnimation: ProcessingAnimation;
+  overlayMode: OverlayMode;
   overlayCustomPosition: OverlayCustomPosition | null;
   selectedAudioDevice: string | null;
   launchAtLogin: boolean;
@@ -118,6 +119,8 @@ export type OverlayPosition =
 export type VisualizationStyle = "Bars" | "Sine" | "Rainbow";
 
 export type ProcessingAnimation = "Pulse" | "FrozenFrame" | "TypingParrot";
+
+export type OverlayMode = "None" | "Full" | "Mini";
 
 export interface OverlayCustomPosition {
   x: number;

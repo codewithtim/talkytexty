@@ -48,30 +48,42 @@ export function SoundwaveBars({ amplitudes, width, height, paused = false }: Sou
       if (!pausedRef.current) {
         const target = targetAmplitudes.current;
         const current = currentAmplitudes.current;
+        const targetLen = target.length;
 
         for (let i = 0; i < numBars; i++) {
-          const raw = target[i] ?? 0;
-          // Aggressively boost so even quiet speech fills most of the height
-          const boosted = Math.min(raw * 14 + 0.25, 1);
-          current[i] = (current[i] ?? 0) + (boosted - (current[i] ?? 0)) * 0.28;
+          // Map bar index to amplitude data — spread source across all bars
+          const srcIdx = targetLen > 0 ? Math.floor((i / numBars) * targetLen) : 0;
+          const raw = target[srcIdx] ?? 0;
+
+          // Light boost, no artificial baseline — silence = flat
+          const boosted = Math.min(raw * 8, 1);
+
+          const prev = current[i] ?? 0;
+          // Fast attack (0.6), slower release (0.12) — snappy response, smooth decay
+          const speed = boosted > prev ? 0.6 : 0.12;
+          current[i] = prev + (boosted - prev) * speed;
         }
       }
 
       const current = currentAmplitudes.current;
-      const barWidth = (width - (numBars - 1) * 2) / numBars;
+      const gap = 2;
+      const barWidth = (width - (numBars - 1) * gap) / numBars;
       const centerY = height / 2;
+      const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+      ctx.shadowColor = isDark ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.15)";
 
       for (let i = 0; i < numBars; i++) {
         const amp = Math.min(current[i] ?? 0, 1);
-        const barHeight = Math.max(4, amp * (height * 0.95));
+        // Minimum bar height of 3px so the waveform shape is always visible
+        const barHeight = Math.max(3, amp * (height * 0.92));
 
-        const x = i * (barWidth + 2);
+        const x = i * (barWidth + gap);
         const y = centerY - barHeight / 2;
 
-        ctx.shadowColor = "#3b82f6";
-        ctx.shadowBlur = 8 * amp;
-        ctx.fillStyle = "#2563eb";
-        ctx.globalAlpha = 0.3 + amp * 0.7;
+        ctx.shadowBlur = 6 * amp;
+        ctx.fillStyle = isDark ? "#d1d5db" : "#6b7280";
+        ctx.globalAlpha = 0.15 + amp * 0.85;
         ctx.beginPath();
         ctx.roundRect(x, y, barWidth, barHeight, 2);
         ctx.fill();
