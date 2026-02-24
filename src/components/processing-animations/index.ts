@@ -2,6 +2,7 @@ import type { ProcessingAnimation } from "@/types";
 
 export { PulseAnimation } from "./pulse";
 export { FrozenFrameAnimation } from "./frozen-frame";
+export { TypingParrotAnimation } from "./typing-parrot";
 
 export interface ProcessingAnimationEntry {
   name: string;
@@ -16,5 +17,9 @@ export const PROCESSING_ANIMATIONS: Record<ProcessingAnimation, ProcessingAnimat
   FrozenFrame: {
     name: "Frozen Frame",
     description: "Freezes the last visualization state",
+  },
+  TypingParrot: {
+    name: "Typing Parrot",
+    description: "8-bit pixel parrot typing on a keyboard",
   },
 };

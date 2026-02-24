@@ -58,7 +58,8 @@ export function SoundwaveSine({ amplitudes, width, height, paused = false }: Sou
       }
 
       const centerY = height / 2;
-      const amp = Math.min(currentRms.current * 6, 1);
+      // Aggressively boost so even quiet speech produces prominent waves
+      const amp = Math.min(currentRms.current * 18 + 0.3, 1);
 
       for (const wave of WAVES) {
         ctx.beginPath();
@@ -69,7 +70,7 @@ export function SoundwaveSine({ amplitudes, width, height, paused = false }: Sou
         ctx.shadowBlur = 8 * amp;
 
         const waveCenter = centerY + wave.yOffset * height;
-        const waveHeight = amp * (height * 0.32) * wave.heightScale;
+        const waveHeight = amp * (height * 0.45) * wave.heightScale;
 
         for (let x = 0; x <= width; x++) {
           const t = (x / width) * Math.PI * 4 * wave.freqMult;

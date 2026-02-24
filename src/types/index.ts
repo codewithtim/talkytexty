@@ -106,7 +106,7 @@ export type OverlayPosition =
 
 export type VisualizationStyle = "Bars" | "Sine" | "Rainbow";
 
-export type ProcessingAnimation = "Pulse" | "FrozenFrame";
+export type ProcessingAnimation = "Pulse" | "FrozenFrame" | "TypingParrot";
 
 export interface OverlayCustomPosition {
   x: number;

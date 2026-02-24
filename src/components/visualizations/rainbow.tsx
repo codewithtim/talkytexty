@@ -76,9 +76,9 @@ export function SoundwaveRainbow({ amplitudes, width, height, paused = false }: 
         const current = currentAmplitudes.current;
 
         for (let i = 0; i < numBars; i++) {
-          // Boost raw amplitude (speech is typically 0.0–0.3) so bars are much taller
           const raw = target[i] ?? 0;
-          const boosted = Math.min(raw * 4, 1);
+          // Aggressively boost so even quiet speech fills most of the height
+          const boosted = Math.min(raw * 14 + 0.25, 1);
           current[i] = (current[i] ?? 0) + (boosted - (current[i] ?? 0)) * 0.28;
         }
       }

@@ -31,15 +31,16 @@ afterEach(() => {
 });
 
 describe("RecordingPill", () => {
-  it("renders with 'Recording' label when recording", () => {
-    render(
+  it("shows red dot without text label when recording", () => {
+    const { container } = render(
       <RecordingPill
         amplitudes={[0.5]}
         isRecording={true}
         isProcessing={false}
       />,
     );
-    expect(screen.getByText("Recording")).toBeInTheDocument();
+    expect(container.querySelector(".bg-red-500")).toBeInTheDocument();
+    expect(screen.queryByText("Recording")).not.toBeInTheDocument();
   });
 
   it("renders with 'Processing...' label when processing", () => {
@@ -116,7 +117,7 @@ describe("RecordingPill", () => {
     expect(pill).toHaveClass("items-center");
   });
 
-  it("displays hotkey with contextual text when recording", () => {
+  it("displays hotkey next to red dot when recording", () => {
     render(
       <RecordingPill
         amplitudes={[]}
@@ -125,8 +126,7 @@ describe("RecordingPill", () => {
         hotkey="⌘⇧Space"
       />,
     );
-    expect(screen.getByText("⌘⇧Space", { exact: false })).toBeInTheDocument();
-    expect(screen.getByText(/to stop/)).toBeInTheDocument();
+    expect(screen.getByText("⌘⇧Space")).toBeInTheDocument();
   });
 
   it("does not display hotkey when not provided", () => {

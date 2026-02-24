@@ -3,12 +3,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useModels } from "@/hooks/use-models";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
+import { CompanyBadge } from "@/components/company-badge";
 import { VISUALIZATIONS } from "@/components/visualizations";
 import { PROCESSING_ANIMATIONS } from "@/components/processing-animations";
 import type { VisualizationStyle, ProcessingAnimation, AudioDevice, TranscriptionModel, RecordingMode, HotkeyBinding } from "@/types";
 
 const STYLE_KEYS: VisualizationStyle[] = ["Bars", "Sine", "Rainbow"];
-const PROCESSING_ANIM_KEYS: ProcessingAnimation[] = ["Pulse", "FrozenFrame"];
+const PROCESSING_ANIM_KEYS: ProcessingAnimation[] = ["Pulse", "FrozenFrame", "TypingParrot"];
 
 function useFakeAmplitudes(): number[] {
   const [amplitudes, setAmplitudes] = useState<number[]>(() =>
@@ -415,10 +416,6 @@ function ModelSelector({
   }, [open]);
 
   const activeModel = activeModelId ? models.find((m) => m.id === activeModelId) : null;
-  const selectedLabel = activeModel
-    ? `${activeModel.modelFamily} — ${activeModel.name}`
-    : "No model selected";
-
   const isActivating = activatingModelId !== null;
 
   return (
@@ -429,8 +426,15 @@ function ModelSelector({
         disabled={isActivating}
         className="w-full rounded-lg bg-[#f5f5f7] dark:bg-[#2a2a2a] border border-[#e5e5e7] dark:border-[#3a3a3a] p-3 flex items-center justify-between cursor-pointer hover:border-gray-400 dark:hover:border-gray-500 transition-colors disabled:opacity-60 disabled:cursor-wait"
       >
-        <span className="text-sm text-gray-900 dark:text-gray-100 truncate">
-          {isActivating ? "Loading model..." : selectedLabel}
+        <span className="text-sm text-gray-900 dark:text-gray-100 truncate flex items-center gap-2">
+          {isActivating ? "Loading model..." : (
+            activeModel ? (
+              <>
+                <CompanyBadge modelFamily={activeModel.modelFamily} size="sm" />
+                <span>{activeModel.modelFamily} — {activeModel.name}</span>
+              </>
+            ) : "No model selected"
+          )}
         </span>
         <svg
           className={`w-4 h-4 text-gray-500 shrink-0 ml-2 transition-transform ${open ? "rotate-180" : ""}`}
@@ -469,11 +473,12 @@ function ModelSelector({
                   }`}
                 >
                   <div className="min-w-0">
-                    <div className={`text-sm font-medium truncate ${
+                    <div className={`text-sm font-medium truncate flex items-center gap-2 ${
                       isActive
                         ? "text-blue-600 dark:text-blue-400"
                         : "text-gray-900 dark:text-gray-100"
                     }`}>
+                      <CompanyBadge modelFamily={m.modelFamily} size="sm" />
                       {m.modelFamily} — {m.name}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2 mt-0.5">

@@ -1,4 +1,5 @@
 import type { TranscriptionModel } from "@/types";
+import { CompanyBadge } from "./company-badge";
 
 interface ModelCardProps {
   model: TranscriptionModel;
@@ -67,12 +68,15 @@ export function ModelCard({
     >
       <div className="flex items-start justify-between">
         <div>
-          <span className={`text-xs uppercase tracking-wide ${
-            model.modelFamily === "Parakeet" ? "text-green-600 dark:text-green-500" : "text-gray-500 dark:text-gray-500"
-          }`}>
-            {model.modelFamily}
-          </span>
           <div className="flex items-center gap-2">
+            <CompanyBadge modelFamily={model.modelFamily} />
+            <span className={`text-xs uppercase tracking-wide ${
+              model.modelFamily === "Parakeet" ? "text-green-600 dark:text-green-500" : "text-gray-500 dark:text-gray-500"
+            }`}>
+              {model.modelFamily}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
             <h3 className="font-semibold text-gray-900 dark:text-gray-100">{model.name}</h3>
             {isActive && (
               <span className="text-xs bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded">
@@ -137,6 +141,10 @@ export function ModelCard({
         <div className="mt-3 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <Spinner />
           <span>Downloading...</span>
+          {model.downloadStatus.status === "Downloading" &&
+            model.downloadStatus.progressPercent > 0 && (
+              <span>{model.downloadStatus.progressPercent}%</span>
+            )}
         </div>
       )}
 

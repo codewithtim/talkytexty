@@ -76,6 +76,7 @@ pub enum VisualizationStyle {
 pub enum ProcessingAnimation {
     Pulse,
     FrozenFrame,
+    TypingParrot,
 }
 
 impl Default for ProcessingAnimation {

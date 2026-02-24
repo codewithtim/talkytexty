@@ -3,6 +3,7 @@ import type { VisualizationStyle, ProcessingAnimation } from "@/types";
 import { VISUALIZATIONS } from "./visualizations";
 import { PulseAnimation } from "./processing-animations/pulse";
 import { FrozenFrameAnimation } from "./processing-animations/frozen-frame";
+import { TypingParrotAnimation } from "./processing-animations/typing-parrot";
 
 interface RecordingPillProps {
   amplitudes: number[];
@@ -58,6 +59,10 @@ export function RecordingPill({
       );
     }
 
+    if (processingAnimation === "TypingParrot") {
+      return <TypingParrotAnimation width={VIZ_WIDTH} height={VIZ_HEIGHT} />;
+    }
+
     // Default: Pulse
     return <PulseAnimation width={VIZ_WIDTH} height={VIZ_HEIGHT} />;
   };
@@ -72,7 +77,7 @@ export function RecordingPill({
         {renderVisualization()}
       </div>
 
-      {/* Status row: dot + label */}
+      {/* Status row: dot + hotkey on the same line */}
       <div className="flex items-center gap-2">
         <div
           className={`w-3 h-3 rounded-full shrink-0 ${
@@ -81,18 +86,15 @@ export function RecordingPill({
               : "bg-yellow-500 animate-pulse"
           }`}
         />
-        <span className="text-white text-base font-medium whitespace-nowrap">
-          {label}
-        </span>
+        {isProcessing && (
+          <span className="text-white text-base font-medium whitespace-nowrap">
+            {label}
+          </span>
+        )}
+        {hotkey && isRecording && (
+          <span className="text-gray-400 text-xs font-mono">{hotkey}</span>
+        )}
       </div>
-
-      {/* Hotkey hint */}
-      {hotkey && (
-        <span className="text-gray-400 text-xs">
-          <span className="font-mono">{hotkey}</span>
-          {isRecording ? " to stop" : ""}
-        </span>
-      )}
     </div>
   );
 }
