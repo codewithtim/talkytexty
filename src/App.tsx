@@ -7,6 +7,7 @@ import { PickerPage } from "./pages/picker";
 import { useRecording } from "./hooks/use-recording";
 import { PreferencesProvider } from "./hooks/use-preferences";
 import { Sidebar } from "./components/sidebar";
+import { PermissionBanner } from "./components/permission-banner";
 import { StatusBar } from "./components/status-bar";
 import { GeneralPanel } from "./components/panels/general-panel";
 import { ModelsPanel } from "./components/panels/models-panel";
@@ -88,6 +89,7 @@ function MainWindow() {
         <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} collapsed={sidebarCollapsed} />
         <div className="flex-1 flex flex-col min-h-0">
           <StatusBar onToggleSidebar={() => setSidebarCollapsed(c => !c)} sidebarCollapsed={sidebarCollapsed} />
+          <PermissionBanner />
           <main className="flex-1 overflow-y-auto p-8">
             {PANELS[activeSection]}
           </main>

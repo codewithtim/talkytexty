@@ -25,9 +25,8 @@ pub async fn request_permission(
 ) -> Result<bool, CommandError> {
     match permission_type.as_str() {
         "microphone" => {
-            // On macOS, cpal will trigger the system permission dialog on first use.
-            // We return the current status after the prompt.
-            Ok(check_microphone_permission())
+            // Trigger the system permission dialog (macOS) and return the result.
+            Ok(request_microphone_permission())
         }
         "accessibility" => {
             request_accessibility_permission();
@@ -72,10 +71,39 @@ fn request_accessibility_permission() {
 }
 
 fn check_microphone_permission() -> bool {
-    // Microphone permission is checked at audio capture time.
-    // For pre-check, we attempt to list input devices.
-    // If cpal can see devices, permission is likely granted.
+    // Attempt to list input devices — if cpal can see them, permission is granted.
+    // On macOS, this returns false when the user has denied or not yet granted access.
+    use cpal::traits::{DeviceTrait, HostTrait};
+    let host = cpal::default_host();
+    let device = match host.default_input_device() {
+        Some(d) => d,
+        None => return false,
+    };
+    // Getting the default config will fail if microphone access is denied
+    device.default_input_config().is_ok()
+}
+
+#[cfg(target_os = "macos")]
+fn request_microphone_permission() -> bool {
+    // Attempt to access the default input device and query its config.
+    // On macOS, this triggers the system permission dialog if
+    // NSMicrophoneUsageDescription is in Info.plist and the user
+    // hasn't responded yet. We run this in a blocking manner so
+    // the frontend can poll the result afterward.
     use cpal::traits::HostTrait;
     let host = cpal::default_host();
-    host.default_input_device().is_some()
+
+    // Try to enumerate input devices — this alone can trigger the dialog on macOS
+    if let Ok(mut devices) = host.input_devices() {
+        // Iterating triggers the permission prompt
+        let _ = devices.next();
+    }
+
+    // Check if permission is now granted
+    check_microphone_permission()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn request_microphone_permission() -> bool {
+    check_microphone_permission()
 }
