@@ -7,6 +7,7 @@ import { CompanyBadge } from "@/components/company-badge";
 import { SettingsGroup, SettingsRow } from "@/components/settings-group";
 import { VISUALIZATIONS } from "@/components/visualizations";
 import { PROCESSING_ANIMATIONS } from "@/components/processing-animations";
+import { ToggleSwitch } from "@/components/toggle-switch";
 import type { VisualizationStyle, ProcessingAnimation, OverlayMode, AudioDevice, TranscriptionModel, RecordingMode, HotkeyBinding } from "@/types";
 
 const STYLE_KEYS: VisualizationStyle[] = ["Bars", "Sine", "Rainbow"];
@@ -137,6 +138,43 @@ export function GeneralPanel() {
               });
             }}
           />
+        </SettingsRow>
+        <SettingsRow label="Settings Hotkey" description="Keyboard shortcut to open this window">
+          <div className="flex items-center gap-3">
+            <HotkeyRecorder
+              currentBinding={
+                preferences?.hotkeys.find(
+                  (h: HotkeyBinding) => h.action === "OpenSettings",
+                )?.keyCombination ?? ""
+              }
+              onRecord={async (combo) => {
+                if (!preferences) return;
+                await updatePreferences({
+                  ...preferences,
+                  hotkeys: preferences.hotkeys.map((h: HotkeyBinding) =>
+                    h.action === "OpenSettings"
+                      ? { ...h, keyCombination: combo }
+                      : h,
+                  ),
+                });
+              }}
+              disabled={!preferences?.hotkeys.find((h: HotkeyBinding) => h.action === "OpenSettings")?.enabled}
+            />
+            <ToggleSwitch
+              checked={preferences?.hotkeys.find((h: HotkeyBinding) => h.action === "OpenSettings")?.enabled ?? false}
+              onChange={async () => {
+                if (!preferences) return;
+                await updatePreferences({
+                  ...preferences,
+                  hotkeys: preferences.hotkeys.map((h: HotkeyBinding) =>
+                    h.action === "OpenSettings"
+                      ? { ...h, enabled: !h.enabled }
+                      : h,
+                  ),
+                });
+              }}
+            />
+          </div>
         </SettingsRow>
       </SettingsGroup>
 
