@@ -9,7 +9,7 @@ export function SettingsGroup({ title, children }: SettingsGroupProps) {
       <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2 px-1">
         {title}
       </h2>
-      <div className="rounded-xl bg-black/[0.03] dark:bg-white/[0.04] border border-black/[0.05] dark:border-white/[0.05] overflow-hidden">
+      <div className="rounded-xl bg-black/[0.03] dark:bg-white/[0.04] border border-black/[0.05] dark:border-white/[0.05]">
         {children}
       </div>
     </section>
