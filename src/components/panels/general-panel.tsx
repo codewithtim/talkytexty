@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useModels } from "@/hooks/use-models";
+import { useHistory } from "@/hooks/use-history";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
 import { CompanyBadge } from "@/components/company-badge";
 import { SettingsGroup, SettingsRow } from "@/components/settings-group";
 import { VISUALIZATIONS } from "@/components/visualizations";
 import { PROCESSING_ANIMATIONS } from "@/components/processing-animations";
 import { ToggleSwitch } from "@/components/toggle-switch";
-import type { VisualizationStyle, ProcessingAnimation, OverlayMode, AudioDevice, TranscriptionModel, RecordingMode, HotkeyBinding } from "@/types";
+import type { VisualizationStyle, ProcessingAnimation, OverlayMode, AudioDevice, TranscriptionModel, RecordingMode, HotkeyBinding, HistoryEntry } from "@/types";
 
 const STYLE_KEYS: VisualizationStyle[] = ["Bars", "Sine", "Rainbow"];
 const PROCESSING_ANIM_KEYS: ProcessingAnimation[] = ["Pulse", "FrozenFrame", "TypingParrot"];
@@ -45,9 +46,128 @@ function useFakeAmplitudes(): number[] {
   return amplitudes;
 }
 
+function countWords(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function useStats(entries: HistoryEntry[]) {
+  return useMemo(() => {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    let totalWords = 0;
+    let totalRecordingMs = 0;
+    let weekWords = 0;
+
+    for (const entry of entries) {
+      const words = countWords(entry.text);
+      totalWords += words;
+      totalRecordingMs += entry.recordingDurationMs;
+      if (new Date(entry.createdAt) >= startOfWeek) {
+        weekWords += words;
+      }
+    }
+
+    const totalRecordingMin = totalRecordingMs / 60_000;
+    const avgWpm = totalRecordingMin > 0 ? Math.round(totalWords / totalRecordingMin) : 0;
+
+    // Time saved: how long it would take to type vs speak
+    // Average typing speed ~40 WPM
+    const typingMinutes = totalWords / 40;
+    const timeSavedMin = Math.max(0, typingMinutes - totalRecordingMin);
+
+    return { avgWpm, weekWords, transcriptions: entries.length, timeSavedMin };
+  }, [entries]);
+}
+
+function formatTimeSaved(minutes: number): string {
+  if (minutes < 1) return "<1m";
+  if (minutes < 60) return `${Math.round(minutes)}m`;
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+}
+
+function StatsWidget({ entries }: { entries: HistoryEntry[] }) {
+  const { avgWpm, weekWords, transcriptions, timeSavedMin } = useStats(entries);
+
+  const stats = [
+    {
+      label: "Avg WPM",
+      value: avgWpm,
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+        </svg>
+      ),
+      color: "text-blue-500",
+      bg: "bg-blue-50 dark:bg-blue-900/20",
+    },
+    {
+      label: "Words This Week",
+      value: weekWords.toLocaleString(),
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+        </svg>
+      ),
+      color: "text-green-500",
+      bg: "bg-green-50 dark:bg-green-900/20",
+    },
+    {
+      label: "Transcriptions",
+      value: transcriptions,
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+        </svg>
+      ),
+      color: "text-purple-500",
+      bg: "bg-purple-50 dark:bg-purple-900/20",
+    },
+    {
+      label: "Time Saved",
+      value: formatTimeSaved(timeSavedMin),
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      color: "text-amber-500",
+      bg: "bg-amber-50 dark:bg-amber-900/20",
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-4 gap-3 mb-6">
+      {stats.map((stat) => (
+        <div
+          key={stat.label}
+          className="rounded-xl border border-[#e5e5e7] dark:border-[#3a3a3a] bg-white dark:bg-[#2a2a2e] p-3.5 flex flex-col gap-2"
+        >
+          <div className={`w-7 h-7 rounded-lg ${stat.bg} flex items-center justify-center ${stat.color}`}>
+            {stat.icon}
+          </div>
+          <div>
+            <div className="text-lg font-semibold text-gray-900 dark:text-gray-100 leading-tight">
+              {stat.value}
+            </div>
+            <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+              {stat.label}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function GeneralPanel() {
   const { preferences, loading, error, updatePreferences } = usePreferences();
   const { models, setActiveModel, activatingModelId } = useModels();
+  const { entries } = useHistory();
   const fakeAmplitudes = useFakeAmplitudes();
 
   const isWindowPicker = preferences?.targetMode.type === "WindowPicker";
@@ -64,6 +184,8 @@ export function GeneralPanel() {
 
   return (
     <div>
+      <StatsWidget entries={entries} />
+
       {/* Model */}
       <SettingsGroup title="Model">
         <div className="px-4 py-3">
