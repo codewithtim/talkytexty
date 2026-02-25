@@ -1,6 +1,6 @@
 // Domain types matching Rust backend (data-model.md)
 
-export type SettingsSection = "general" | "history" | "models" | "hotkeys" | "about";
+export type SettingsSection = "general" | "history" | "models" | "hotkeys" | "changelog" | "about";
 
 export interface HistoryEntry {
   id: string;

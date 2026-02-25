@@ -25,7 +25,7 @@ fn test_target_window_has_required_fields() {
 }
 
 #[test]
-fn test_filter_own_windows_removes_text_to_code() {
+fn test_filter_own_windows_removes_talkytexty() {
     let windows = vec![
         TargetWindow {
             window_id: "1".to_string(),
@@ -36,8 +36,8 @@ fn test_filter_own_windows_removes_text_to_code() {
         },
         TargetWindow {
             window_id: "2".to_string(),
-            title: "Text to Code - Settings".to_string(),
-            app_name: "text-to-code".to_string(),
+            title: "TalkyTexty - Settings".to_string(),
+            app_name: "TalkyTexty".to_string(),
             process_id: 200,
             icon: None,
         },

@@ -11,6 +11,7 @@ import { GeneralPanel } from "./components/panels/general-panel";
 import { ModelsPanel } from "./components/panels/models-panel";
 import { HotkeysPanel } from "./components/panels/hotkeys-panel";
 import { AboutPanel } from "./components/panels/about-panel";
+import { ChangelogPanel } from "./components/panels/changelog-panel";
 import { HistoryPanel } from "./components/panels/history-panel";
 import type { SettingsSection } from "./types";
 
@@ -26,6 +27,7 @@ const PANELS: Record<SettingsSection, React.ReactNode> = {
   history: <HistoryPanel />,
   models: <ModelsPanel />,
   hotkeys: <HotkeysPanel />,
+  changelog: <ChangelogPanel />,
   about: <AboutPanel />,
 };
 
@@ -33,7 +35,7 @@ function NotTauriFallback() {
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white flex items-center justify-center p-8">
       <div className="text-center">
-        <h1 className="text-2xl font-bold mb-2">Text to Code</h1>
+        <h1 className="text-2xl font-bold mb-2">TalkyTexty</h1>
         <p className="text-gray-500 dark:text-gray-400">
           This app must be run inside Tauri. Start it with{" "}
           <code className="bg-gray-200 dark:bg-gray-800 px-2 py-0.5 rounded">pnpm tauri dev</code>
