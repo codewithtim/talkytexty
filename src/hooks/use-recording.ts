@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { emit } from "@tauri-apps/api/event";
-import type { TranscriptionResult, AudioEvent, UserPreferences } from "@/types";
+import type { TranscriptionResult, AudioEvent, UserPreferences, PermissionStatus } from "@/types";
 
 type RecordingState = "idle" | "recording" | "transcribing" | "injecting";
 
@@ -31,6 +31,17 @@ export function useRecording(
   const startRecording = useCallback(async () => {
     try {
       setError(null);
+
+      // Check permissions before starting — both mic and accessibility are required
+      const perms = await invoke<PermissionStatus>("check_permissions");
+      if (!perms.microphone || !perms.accessibility) {
+        const missing = [];
+        if (!perms.microphone) missing.push("Microphone");
+        if (!perms.accessibility) missing.push("Accessibility");
+        throw new Error(
+          `${missing.join(" and ")} permission${missing.length > 1 ? "s" : ""} required. Grant access in the permission banner above.`,
+        );
+      }
 
       const channel = new Channel<AudioEvent>();
       channel.onmessage = (event: AudioEvent) => {

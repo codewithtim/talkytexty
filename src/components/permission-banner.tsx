@@ -1,29 +1,57 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { PermissionStatus } from "@/types";
 
-export function PermissionBanner() {
+export function usePermissions() {
   const [status, setStatus] = useState<PermissionStatus | null>(null);
-  const [requesting, setRequesting] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
 
-  useEffect(() => {
-    invoke<PermissionStatus>("check_permissions").then(setStatus).catch(() => {});
+  const check = useCallback(async () => {
+    try {
+      const s = await invoke<PermissionStatus>("check_permissions");
+      setStatus(s);
+      return s;
+    } catch {
+      return null;
+    }
   }, []);
 
-  if (!status || dismissed) return null;
+  useEffect(() => {
+    void check();
+  }, [check]);
+
+  // Poll every 2 seconds — accessibility permission is toggled in System Settings
+  // so we need to detect when the user grants it
+  useEffect(() => {
+    if (!status) return;
+    if (status.microphone && status.accessibility) return;
+
+    const interval = setInterval(() => {
+      void check();
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [status, check]);
+
+  const allGranted = status ? status.microphone && status.accessibility : false;
+
+  return { status, allGranted, refresh: check };
+}
+
+export function PermissionBanner() {
+  const { status, allGranted, refresh } = usePermissions();
+  const [requesting, setRequesting] = useState(false);
+
+  if (!status || allGranted) return null;
 
   const needsMic = !status.microphone;
   const needsAccessibility = !status.accessibility;
-
-  if (!needsMic && !needsAccessibility) return null;
 
   const handleRequest = async (type: "microphone" | "accessibility") => {
     setRequesting(true);
     try {
       await invoke<boolean>("request_permission", { permissionType: type });
-      const updated = await invoke<PermissionStatus>("check_permissions");
-      setStatus(updated);
+      // Wait a moment for macOS to process, then re-check
+      await new Promise((r) => setTimeout(r, 500));
+      await refresh();
     } catch {
       // Permission request failed — user can retry
     } finally {
@@ -42,7 +70,8 @@ export function PermissionBanner() {
             Permissions required
           </h3>
           <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-            TalkyTexty needs access to work properly.
+            TalkyTexty needs both permissions to record speech and type it into your apps.
+            {needsAccessibility && " After enabling Accessibility, you may need to restart the app."}
           </p>
           <div className="flex flex-wrap gap-2 mt-3">
             {needsMic && (
@@ -62,20 +91,37 @@ export function PermissionBanner() {
                 disabled={requesting}
                 className="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-100 dark:bg-amber-800/40 text-amber-800 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-800/60 transition-colors cursor-pointer disabled:opacity-50"
               >
-                {requesting ? "Requesting..." : "Grant Accessibility Access"}
+                {requesting ? "Opening Settings..." : "Grant Accessibility Access"}
               </button>
             )}
           </div>
+          <div className="flex gap-3 mt-3">
+            {needsMic && (
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-red-400" />
+                <span className="text-[11px] text-amber-700 dark:text-amber-400">Microphone</span>
+              </div>
+            )}
+            {!needsMic && (
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-green-400" />
+                <span className="text-[11px] text-amber-700 dark:text-amber-400">Microphone</span>
+              </div>
+            )}
+            {needsAccessibility && (
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-red-400" />
+                <span className="text-[11px] text-amber-700 dark:text-amber-400">Accessibility</span>
+              </div>
+            )}
+            {!needsAccessibility && (
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-green-400" />
+                <span className="text-[11px] text-amber-700 dark:text-amber-400">Accessibility</span>
+              </div>
+            )}
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setDismissed(true)}
-          className="text-amber-400 hover:text-amber-600 dark:hover:text-amber-200 transition-colors cursor-pointer"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-          </svg>
-        </button>
       </div>
     </div>
   );

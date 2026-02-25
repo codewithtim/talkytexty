@@ -41,25 +41,66 @@ pub async fn request_permission(
 
 #[cfg(target_os = "macos")]
 fn check_accessibility_permission() -> bool {
-    // On macOS, check if Accessibility permission is granted
-    // This uses the ApplicationServices framework
-    use std::process::Command;
-    let output = Command::new("osascript")
-        .arg("-e")
-        .arg("tell application \"System Events\" to return true")
-        .output();
-    matches!(output, Ok(o) if o.status.success())
+    // Use the native AXIsProcessTrusted API from ApplicationServices
+    extern "C" {
+        fn AXIsProcessTrusted() -> bool;
+    }
+    unsafe { AXIsProcessTrusted() }
 }
 
 #[cfg(not(target_os = "macos"))]
 fn check_accessibility_permission() -> bool {
-    // On Windows/Linux, no special accessibility permission needed
     true
 }
 
 #[cfg(target_os = "macos")]
 fn request_accessibility_permission() {
-    // Open System Preferences to Accessibility pane
+    // Use AXIsProcessTrustedWithOptions with the prompt option to show
+    // the system dialog, then also open System Settings as a fallback
+    // since the prompt only appears once.
+    extern "C" {
+        fn CFStringCreateWithCString(
+            alloc: *const std::ffi::c_void,
+            c_str: *const std::ffi::c_char,
+            encoding: u32,
+        ) -> *const std::ffi::c_void;
+        fn CFDictionaryCreate(
+            allocator: *const std::ffi::c_void,
+            keys: *const *const std::ffi::c_void,
+            values: *const *const std::ffi::c_void,
+            num_values: isize,
+            key_callbacks: *const std::ffi::c_void,
+            value_callbacks: *const std::ffi::c_void,
+            ) -> *const std::ffi::c_void;
+        fn AXIsProcessTrustedWithOptions(options: *const std::ffi::c_void) -> bool;
+        static kCFBooleanTrue: *const std::ffi::c_void;
+        static kCFTypeDictionaryKeyCallBacks: std::ffi::c_void;
+        static kCFTypeDictionaryValueCallBacks: std::ffi::c_void;
+    }
+
+    unsafe {
+        // kAXTrustedCheckOptionPrompt = "AXTrustedCheckOptionPrompt"
+        let key = CFStringCreateWithCString(
+            std::ptr::null(),
+            b"AXTrustedCheckOptionPrompt\0".as_ptr() as *const _,
+            0x08000100, // kCFStringEncodingUTF8
+        );
+        let keys = [key];
+        let values = [kCFBooleanTrue];
+        let options = CFDictionaryCreate(
+            std::ptr::null(),
+            keys.as_ptr(),
+            values.as_ptr(),
+            1,
+            &kCFTypeDictionaryKeyCallBacks as *const _,
+            &kCFTypeDictionaryValueCallBacks as *const _,
+        );
+        AXIsProcessTrustedWithOptions(options);
+    }
+
+    // Also open System Settings as a convenience — the prompt dialog
+    // only appears the very first time, after that users need to toggle
+    // the switch manually in System Settings.
     let _ = std::process::Command::new("open")
         .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
         .spawn();
