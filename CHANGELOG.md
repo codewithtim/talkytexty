@@ -4,10 +4,18 @@ All notable changes to TalkyTexty are documented here.
 
 ## [0.2.1] - 2026-02-25
 
+### Added
+
+- Stats widget on General panel showing avg WPM, words this week, total transcriptions, and time saved
+- macOS microphone permission request on first launch via Info.plist
+- Accessibility permission enforcement — blocks recording until both mic and accessibility are granted
+- Permission banner with real-time status indicators and grant buttons (polls every 2s for accessibility changes)
+
 ### Changed
 
 - Moved settings hotkey into the General panel's Recording section
 - Removed dedicated Hotkeys sidebar item and tray menu entry
+- Removed Hotkeys item from system tray menu
 
 ## [0.2.0] - 2026-02-25
 

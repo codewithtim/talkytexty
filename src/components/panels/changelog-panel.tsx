@@ -13,6 +13,11 @@ const CHANGELOG: ChangelogEntry[] = [
   {
     version: "0.2.1",
     date: "2026-02-25",
+    added: [
+      "Stats widget on General panel (avg WPM, words this week, transcriptions, time saved)",
+      "macOS microphone permission request on first launch",
+      "Accessibility permission enforcement with real-time status banner",
+    ],
     changed: [
       "Moved settings hotkey into the General panel's Recording section",
       "Removed dedicated Hotkeys sidebar item and tray menu entry",

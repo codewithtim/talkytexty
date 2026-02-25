@@ -1,10 +1,10 @@
-# Text to Code - Project Research Report
+# TalkyTexty - Project Research Report
 
 ## Executive Summary
 
-Text to Code is a cross-platform desktop application that captures speech via a global hotkey, transcribes it locally using on-device AI models, and injects the resulting text into any target application. It runs entirely offline — no API keys, no cloud, no data leaves the machine. Built with Tauri v2 (Rust backend + React/TypeScript frontend), it operates as a system tray background process with a floating recording overlay and a settings UI.
+TalkyTexty is a cross-platform desktop application that captures speech via a global hotkey, transcribes it locally using on-device AI models, and injects the resulting text into any target application. It runs entirely offline — no API keys, no cloud, no data leaves the machine. Built with Tauri v2 (Rust backend + React/TypeScript frontend), it operates as a system tray background process with a floating recording overlay and a settings UI.
 
-The project is in active development on the `main` branch. The core voice input feature is complete and functional. The codebase has since been extended with a Superwhisper-inspired UI redesign, multiple visualization styles, processing animations, transcription history with audio playback, audio device selection, overlay modes, and tray icon recording indicators. Several TODO items remain for polish, distribution, and branding.
+The project is in active development on the `main` branch (v0.2.1). The core voice input feature is complete and functional. The codebase has since been extended with a Superwhisper-inspired UI redesign, multiple visualization styles, processing animations, transcription history with audio playback, audio device selection, overlay modes, tray icon recording indicators, macOS permission handling (microphone + accessibility), a stats dashboard, and a changelog panel. Several TODO items remain for polish and distribution.
 
 ---
 
@@ -25,7 +25,7 @@ Three Tauri webview windows are defined in `tauri.conf.json`:
 
 | Window | Size | Purpose | Behavior |
 |--------|------|---------|----------|
-| `main` (settings) | 800x600 | Sidebar-based settings UI with panels for general, history, models, hotkeys, about | Visible on startup, overlay title bar with macOS traffic light positioning. Close hides rather than quits. |
+| `main` (settings) | 800x600 | Sidebar-based settings UI with panels for general, history, models, changelog, about | Visible on startup, overlay title bar with macOS traffic light positioning. Close hides rather than quits. Permission banner shown when mic/accessibility not granted. |
 | `recording-overlay` | 480x120 | Floating pill showing recording status + soundwave visualization | Transparent, always-on-top, non-focusable, skip taskbar, non-resizable. Shown during recording, hidden on completion. Supports Full/Mini/None modes. |
 | `window-picker` | 640x140 | macOS Cmd+Tab-style app selector for text injection target | Transparent, always-on-top, focusable (for keyboard navigation), centered on screen, skip taskbar. |
 
@@ -62,7 +62,7 @@ src-tauri/src/
     model_commands.rs — list_models, set_active_model, download_model, delete_model
     injection_commands.rs — inject_text, list_windows, copy_to_clipboard
     preferences_commands.rs — get_preferences, update_preferences (with hotkey re-registration)
-    system_commands.rs — check_permissions, request_permission (macOS Accessibility + Microphone)
+    system_commands.rs — check_permissions (AXIsProcessTrusted + cpal), request_permission (AXIsProcessTrustedWithOptions prompt + System Settings, cpal device enumeration for mic dialog)
     window_commands.rs — set_traffic_lights_visible (macOS-specific)
     history_commands.rs — list_history, delete_history_entry, clear_history, get_history_audio
 ```
@@ -72,7 +72,7 @@ src-tauri/src/
 ```
 src/
   main.tsx            — React app entry point
-  App.tsx             — BrowserRouter with route-based window switching (overlay, picker, main), sidebar navigation, hotkey listener
+  App.tsx             — BrowserRouter with route-based window switching (overlay, picker, main), sidebar navigation, hotkey listener, PreferencesProvider context
   index.css           — Tailwind CSS v4 import + global styles (.kbd badges, scrollbar, selection colors)
   types/index.ts      — TypeScript interfaces matching all Rust domain types
   utils/
@@ -81,8 +81,9 @@ src/
     overlay.tsx       — Transparent recording overlay with visualization, processing animation, metadata display
     picker.tsx        — Window picker (Cmd+Tab style) for target window selection
   components/
-    sidebar.tsx       — Collapsible navigation sidebar with colored icon backgrounds (5 sections) + branding footer
+    sidebar.tsx       — Collapsible navigation sidebar with colored icon backgrounds (5 sections: General, History, Models, What's New, About) + branding footer
     status-bar.tsx    — Top bar with sidebar toggle and audio device selector dropdown
+    permission-banner.tsx — Non-dismissible permission status banner with grant buttons and polling (usePermissions hook)
     settings-group.tsx — Reusable card containers (SettingsGroup + SettingsRow) for settings panels
     toggle-switch.tsx — Styled toggle switch input component
     company-badge.tsx — OpenAI/NVIDIA company badges with SVG icons for model cards
@@ -100,15 +101,16 @@ src/
       frozen-frame.tsx — Frozen last visualization frame at reduced opacity
       typing-parrot.tsx — 8-bit pixel art parrot typing on keyboard animation
     panels/
-      general-panel.tsx — Model selector, recording mode, target mode, visualization picker, animation picker, overlay mode/position/opacity
+      general-panel.tsx — Stats widget, model selector, recording mode/hotkey, settings hotkey, target mode, visualization picker, animation picker, overlay mode
       models-panel.tsx — Model list with download/activate/delete actions
       history-panel.tsx — Transcription history with waveform playback, peak extraction, audio decoding
-      hotkeys-panel.tsx — Hotkey bindings with toggle enable/disable and key recorder
+      hotkeys-panel.tsx — Hotkey bindings with toggle enable/disable and key recorder (no longer in sidebar, settings hotkey moved to General)
+      changelog-panel.tsx — Versioned changelog display with color-coded Added/Fixed/Changed/Removed sections
       about-panel.tsx — App info, version display, launch-at-login toggle
   hooks/
     use-recording.ts  — Core recording state machine (idle→recording→transcribing→injecting→idle) with cancel support
     use-models.ts     — Model CRUD operations via Tauri commands
-    use-preferences.ts — Preferences read/update via Tauri commands
+    use-preferences.tsx — Preferences read/update via React Context (PreferencesProvider wraps MainWindow, shared state across all consumers)
     use-audio-stream.ts — Listens for amplitude-update events for overlay visualization
     use-history.ts    — History entries load, delete, clear via Tauri commands
 ```
@@ -255,10 +257,11 @@ Key design decisions:
 
 ### Frontend State
 
-The main settings window uses a **sidebar + panel** architecture. Each panel manages its own state via custom hooks:
-- `useRecording`: State machine (`idle` → `recording` → `transcribing` → `injecting` → `idle`) with Tauri event listeners for hotkey-driven flow, plus cancel support
+The main settings window uses a **sidebar + panel** architecture wrapped in a `PreferencesProvider` React Context so all panels share a single preferences state. Each panel manages its own domain state via custom hooks:
+- `useRecording`: State machine (`idle` → `recording` → `transcribing` → `injecting` → `idle`) with Tauri event listeners for hotkey-driven flow, plus cancel support; checks permissions before starting
 - `useModels`: Model list, download/activate/delete operations with loading states
-- `usePreferences`: Preferences CRUD with optimistic updates
+- `usePreferences`: React Context-based preferences shared across all consumers (PreferencesProvider wraps MainWindow)
+- `usePermissions`: Permission polling hook (mic + accessibility) with 2s interval for accessibility changes
 - `useAudioStream`: Amplitude data from `amplitude-update` events
 - `useHistory`: History entry list, delete, clear operations
 
@@ -351,17 +354,17 @@ When enabling a recording action (Toggle or PushToTalk), the system automaticall
 
 The main window uses a **Superwhisper-inspired** sidebar + panel layout:
 
-- **Sidebar**: Collapsible navigation with 5 sections (General, History, Models, Hotkeys, About), colored icon backgrounds, branding footer with version
+- **Sidebar**: Collapsible navigation with 5 sections (General, History, Models, What's New, About), colored icon backgrounds, branding footer with version
 - **StatusBar**: Top bar with sidebar toggle button and audio device selector dropdown
 - **SettingsGroup/SettingsRow**: Reusable card containers for grouped settings with label-right layout
 
 ### Settings Panels
 
-- **GeneralPanel**: Model selector with company badges, recording mode (toggle/push-to-talk), target mode (active window/picker), visualization style picker with preview cards, processing animation picker, overlay mode selector (Full/Mini/None), overlay position, overlay opacity slider
+- **GeneralPanel**: Stats widget (avg WPM, words this week, transcriptions, time saved), model selector with company badges, recording mode (toggle/push-to-talk) with hotkey, settings hotkey with toggle, target mode (active window/picker), visualization style picker with preview cards, processing animation picker, overlay mode selector (Full/Mini/None)
 - **ModelsPanel**: Model list with ModelCard components showing download progress, activate/delete actions
 - **HistoryPanel**: Transcription history entries with waveform playback visualization, peak extraction, audio decoding, search, delete, clear all
-- **HotkeysPanel**: Hotkey binding rows with kbd-style badges, HotkeyRecorder for capture, ToggleSwitch for enable/disable
-- **AboutPanel**: App info card with version, launch-at-login toggle
+- **ChangelogPanel**: Versioned release history with color-coded sections (Added, Fixed, Changed, Removed)
+- **AboutPanel**: App info card with parrot icon, version, launch-at-login toggle
 
 ### Recording Overlay
 
@@ -464,8 +467,9 @@ Also inline unit tests in `capture.rs`, `resample.rs`, `models.rs`, `storage.rs`
 
 ### macOS
 - `macOSPrivateApi: true` for transparent overlay window (disqualifies Mac App Store)
-- Accessibility permission required for keyboard simulation (enigo/CGEvents)
-- Microphone permission prompted on first use
+- Accessibility permission required for keyboard simulation — checked via native `AXIsProcessTrusted()` API, requested via `AXIsProcessTrustedWithOptions` with prompt flag + opens System Settings
+- Microphone permission prompted on first use via `NSMicrophoneUsageDescription` in `src-tauri/Info.plist` (Tauri merges into built app); cpal device enumeration triggers the system dialog
+- Permission banner shown at top of settings when either permission is missing; polls every 2s for accessibility changes; recording is blocked until both are granted
 - Window activation via AppleScript (`osascript` → System Events)
 - Traffic light positioning via `objc2-app-kit` (NSWindow/NSButton APIs)
 - Hotkey display uses macOS symbols (⌘⇧⌥)
@@ -529,15 +533,18 @@ The project uses a structured "Speckit" workflow:
 - Company badges (OpenAI/NVIDIA) on model cards
 - Platform-aware hotkey display formatting
 - Escape-to-cancel recording
+- App branding: TalkyTexty name + custom parrot pixel art icon
+- macOS permission handling (microphone + accessibility) with permission banner
+- Stats dashboard (avg WPM, words this week, transcriptions, time saved)
+- Changelog panel (What's New) in sidebar
+- Preferences synced across all UI consumers via React Context
+- CONTRIBUTING.md and CHANGELOG.md
 
 ### Open TODO Items
-- UI needs further polish
 - Replace download spinner with progress bar for model downloads
 - Options to add custom/new models
-- Come up with product name and logo
 - Product website
 - Test distribution releases
-- Allow different hotkeys for window selection
 
 ### Technical Observations
 
@@ -566,7 +573,7 @@ The project uses a structured "Speckit" workflow:
 ### Backend (Rust) — 24 source files, ~3,001 lines
 | File | Lines | Purpose |
 |------|-------|---------|
-| `lib.rs` | 481 | App entry: AppState, tray (with recording icon), hotkeys, overlay positioning, window lifecycle |
+| `lib.rs` | 470 | App entry: AppState, tray (with recording icon), hotkeys, overlay positioning, window lifecycle |
 | `main.rs` | 6 | Binary entry point |
 | `hotkeys.rs` | 59 | Pure hotkey event routing |
 | `audio/mod.rs` | 51 | Audio domain types |
@@ -587,21 +594,22 @@ The project uses a structured "Speckit" workflow:
 | `commands/model_commands.rs` | 281 | Model CRUD commands |
 | `commands/injection_commands.rs` | 70 | Text injection commands |
 | `commands/preferences_commands.rs` | 87 | Preferences commands |
-| `commands/system_commands.rs` | 81 | Permission commands |
+| `commands/system_commands.rs` | 151 | Permission commands (AXIsProcessTrusted, AXIsProcessTrustedWithOptions, cpal mic check) |
 | `commands/window_commands.rs` | 40 | macOS traffic light visibility |
 | `commands/history_commands.rs` | 36 | History CRUD + audio retrieval |
 
-### Frontend (TypeScript/React) — 32 source files, ~3,754 lines
+### Frontend (TypeScript/React) — 34 source files, ~4,000 lines
 | File | Lines | Purpose |
 |------|-------|---------|
 | `main.tsx` | 10 | App mount |
-| `App.tsx` | 111 | Router, sidebar layout, hotkey listener, section navigation |
-| `types/index.ts` | 163 | All TypeScript interfaces (HistoryEntry, UserPreferences, AudioEvent, etc.) |
+| `App.tsx` | 115 | Router, sidebar layout, hotkey listener, PreferencesProvider, PermissionBanner |
+| `types/index.ts` | 163 | All TypeScript interfaces (HistoryEntry, UserPreferences, AudioEvent, PermissionStatus, etc.) |
 | `utils/format-hotkey.ts` | 36 | Platform-aware hotkey formatting (⌘⇧ vs Ctrl+Shift) |
 | `pages/overlay.tsx` | 135 | Recording overlay with visualization, processing animation, metadata |
 | `pages/picker.tsx` | 181 | Window picker |
-| `components/sidebar.tsx` | 129 | Collapsible nav sidebar with colored icons + branding |
+| `components/sidebar.tsx` | 128 | Collapsible nav sidebar with colored icons (5 sections) + branding |
 | `components/status-bar.tsx` | 128 | Top bar with audio device selector |
+| `components/permission-banner.tsx` | 128 | Permission status banner with grant buttons + usePermissions hook |
 | `components/settings-group.tsx` | 42 | SettingsGroup + SettingsRow card containers |
 | `components/toggle-switch.tsx` | 20 | Styled toggle switch |
 | `components/company-badge.tsx` | 67 | OpenAI/NVIDIA badges with SVG icons |
@@ -616,14 +624,15 @@ The project uses a structured "Speckit" workflow:
 | `components/processing-animations/pulse.tsx` | 13 | Pulse glow animation |
 | `components/processing-animations/frozen-frame.tsx` | 28 | Frozen frame animation |
 | `components/processing-animations/typing-parrot.tsx` | 172 | Pixel art parrot animation |
-| `components/panels/general-panel.tsx` | 651 | General settings (model, recording, input, appearance) |
+| `components/panels/general-panel.tsx` | 775 | Stats widget, model selector, recording/settings hotkeys, input, visualization, overlay mode |
 | `components/panels/models-panel.tsx` | 60 | Model management panel |
 | `components/panels/history-panel.tsx` | 472 | Transcription history with waveform playback |
-| `components/panels/hotkeys-panel.tsx` | 97 | Hotkey configuration panel |
-| `components/panels/about-panel.tsx` | 49 | About info + launch-at-login |
+| `components/panels/hotkeys-panel.tsx` | 97 | Hotkey configuration (no longer in sidebar) |
+| `components/panels/changelog-panel.tsx` | 100 | Versioned changelog with color-coded sections |
+| `components/panels/about-panel.tsx` | 45 | About info with parrot icon + launch-at-login |
 | `hooks/use-recording.ts` | 148 | Recording state machine with cancel |
 | `hooks/use-models.ts` | 97 | Model operations |
-| `hooks/use-preferences.ts` | 53 | Preferences operations |
+| `hooks/use-preferences.tsx` | 70 | React Context-based preferences (PreferencesProvider + usePreferences) |
 | `hooks/use-audio-stream.ts` | 29 | Amplitude event listener |
 | `hooks/use-history.ts` | 66 | History operations |
 
