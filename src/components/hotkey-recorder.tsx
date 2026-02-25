@@ -25,6 +25,7 @@ function formatKeyForTauri(e: KeyboardEvent): string | null {
   // Map common keys to Tauri format
   const keyMap: Record<string, string> = {
     " ": "Space",
+    "\u00A0": "Space", // non-breaking space (Alt+Space on macOS)
     ArrowUp: "Up",
     ArrowDown: "Down",
     ArrowLeft: "Left",
@@ -42,7 +43,23 @@ function formatKeyForTauri(e: KeyboardEvent): string | null {
     "`": "`",
   };
 
-  const mappedKey = keyMap[key] ?? key.toUpperCase();
+  // Fallback: use e.code for physical key name when Alt transforms e.key
+  // (e.g. Alt+S → "ß" on macOS, but e.code is still "KeyS")
+  const codeMap: Record<string, string> = {
+    Space: "Space",
+    Backspace: "Backspace",
+    Tab: "Tab",
+    Enter: "Enter",
+    Escape: "Escape",
+    Delete: "Delete",
+  };
+
+  const mappedKey =
+    keyMap[key] ??
+    codeMap[e.code] ??
+    (e.code.startsWith("Key") ? e.code.slice(3) : null) ??
+    (e.code.startsWith("Digit") ? e.code.slice(5) : null) ??
+    key.toUpperCase();
   parts.push(mappedKey);
 
   return parts.join("+");

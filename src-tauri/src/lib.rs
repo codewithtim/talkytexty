@@ -374,7 +374,7 @@ pub fn run() {
                 .icon(Image::from_bytes(include_bytes!("../icons/32x32.png"))?)
                 .menu(&menu)
                 .show_menu_on_left_click(false)
-                .tooltip("Text to Code")
+                .tooltip("TalkyTexty")
                 .on_menu_event(move |app, event| {
                     match event.id().as_ref() {
                         "toggle_recording" => {
