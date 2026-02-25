@@ -4,7 +4,7 @@
 
 Text to Code is a cross-platform desktop application that captures speech via a global hotkey, transcribes it locally using on-device AI models, and injects the resulting text into any target application. It runs entirely offline — no API keys, no cloud, no data leaves the machine. Built with Tauri v2 (Rust backend + React/TypeScript frontend), it operates as a system tray background process with a floating recording overlay and a settings UI.
 
-The project is in active development on the `001-voice-input` feature branch. All planned implementation tasks from the original specification are marked complete. The codebase is well-structured, thoroughly documented, and follows a formal development constitution. Several TODO items remain for polish, additional features, and distribution.
+The project is in active development on the `main` branch. The core voice input feature is complete and functional. The codebase has since been extended with a Superwhisper-inspired UI redesign, multiple visualization styles, processing animations, transcription history with audio playback, audio device selection, overlay modes, and tray icon recording indicators. Several TODO items remain for polish, distribution, and branding.
 
 ---
 
@@ -14,8 +14,8 @@ The project is in active development on the `001-voice-input` feature branch. Al
 
 The app is a **Tauri v2 desktop application** with two distinct execution layers:
 
-1. **Rust backend** (`src-tauri/src/`): Handles audio capture, transcription, text injection, preferences persistence, hotkey routing, system tray, and window management.
-2. **React frontend** (`src/`): Provides the settings UI, model management, hotkey configuration, recording overlay, and window picker.
+1. **Rust backend** (`src-tauri/src/`): Handles audio capture, transcription, text injection, preferences persistence, hotkey routing, system tray, window management, and transcription history.
+2. **React frontend** (`src/`): Provides the settings UI with sidebar navigation, model management, hotkey configuration, recording overlay with selectable visualizations, transcription history with waveform playback, and window picker.
 
 Communication between layers uses **Tauri commands** (`invoke()`) for request/response and **Tauri Channels** for streaming data (amplitude updates during recording).
 
@@ -25,9 +25,9 @@ Three Tauri webview windows are defined in `tauri.conf.json`:
 
 | Window | Size | Purpose | Behavior |
 |--------|------|---------|----------|
-| `main` (settings) | 800x600 | Model management, hotkey config, preferences | Hidden by default, opened from system tray. Close hides rather than quits. |
-| `recording-overlay` | 300x80 | Floating pill showing recording status + soundwave | Transparent, always-on-top, click-through (`set_ignore_cursor_events`), non-focusable. Shown during recording, hidden on completion. |
-| `window-picker` | 640x140 | macOS Cmd+Tab-style app selector for text injection target | Transparent, always-on-top, focusable (for keyboard navigation), centered on screen. |
+| `main` (settings) | 800x600 | Sidebar-based settings UI with panels for general, history, models, hotkeys, about | Visible on startup, overlay title bar with macOS traffic light positioning. Close hides rather than quits. |
+| `recording-overlay` | 480x120 | Floating pill showing recording status + soundwave visualization | Transparent, always-on-top, non-focusable, skip taskbar, non-resizable. Shown during recording, hidden on completion. Supports Full/Mini/None modes. |
+| `window-picker` | 640x140 | macOS Cmd+Tab-style app selector for text injection target | Transparent, always-on-top, focusable (for keyboard navigation), centered on screen, skip taskbar. |
 
 ### Backend Module Organization (Domain-Driven Design)
 
@@ -35,12 +35,12 @@ The Rust backend is organized by **bounded context**, not technical layer:
 
 ```
 src-tauri/src/
-  lib.rs              — App entry point: tray setup, hotkey registration, overlay positioning, window lifecycle
+  lib.rs              — App entry point: AppState, tray setup, hotkey registration, overlay positioning, window lifecycle, recording icon
   main.rs             — Thin binary entry point, calls lib::run()
   hotkeys.rs          — Pure function hotkey event routing (HotkeyEvent → HotkeyResponse)
   audio/
     mod.rs            — Domain types: RecordingSession, RecordingStatus, AudioEvent, TranscriptionResult
-    capture.rs        — Microphone capture via cpal, stereo→mono conversion, amplitude calculation
+    capture.rs        — Microphone capture via cpal, stereo→mono conversion, amplitude calculation, device enumeration
     resample.rs       — Sample rate conversion (device native → 16kHz) via rubato FFT resampler
   transcription/
     mod.rs            — Domain types: TranscriptionModel, ModelVariant, Quantization, DownloadStatus
@@ -51,16 +51,20 @@ src-tauri/src/
     keyboard.rs       — Text injection via enigo simulated keystrokes
     clipboard.rs      — Text injection via clipboard paste (arboard + Cmd/Ctrl+V), restores previous clipboard
     windows.rs        — Window enumeration via x-win, deduplication by app name, platform-specific activation
+  history/
+    mod.rs            — HistoryEntry struct, JSON persistence, WAV audio file storage, max 5000 entries
   preferences/
-    mod.rs            — Domain types: UserPreferences, HotkeyBinding, HotkeyAction, RecordingMode, etc.
+    mod.rs            — Domain types: UserPreferences, HotkeyBinding, HotkeyAction, RecordingMode, TargetMode, TextInjectionMethod, OverlayPosition, OverlayMode, VisualizationStyle, ProcessingAnimation, OverlayCustomPosition, validation & conflict detection
     storage.rs        — JSON file persistence for preferences
   commands/
     mod.rs            — CommandError type (code + message)
-    audio_commands.rs — start_recording, stop_recording Tauri commands
+    audio_commands.rs — start_recording, stop_recording, cancel_recording, list_audio_devices
     model_commands.rs — list_models, set_active_model, download_model, delete_model
     injection_commands.rs — inject_text, list_windows, copy_to_clipboard
     preferences_commands.rs — get_preferences, update_preferences (with hotkey re-registration)
     system_commands.rs — check_permissions, request_permission (macOS Accessibility + Microphone)
+    window_commands.rs — set_traffic_lights_visible (macOS-specific)
+    history_commands.rs — list_history, delete_history_entry, clear_history, get_history_audio
 ```
 
 ### Frontend Organization
@@ -68,25 +72,45 @@ src-tauri/src/
 ```
 src/
   main.tsx            — React app entry point
-  App.tsx             — BrowserRouter with route-based window switching (overlay, picker, main)
-  index.css           — Tailwind CSS v4 import
+  App.tsx             — BrowserRouter with route-based window switching (overlay, picker, main), sidebar navigation, hotkey listener
+  index.css           — Tailwind CSS v4 import + global styles (.kbd badges, scrollbar, selection colors)
   types/index.ts      — TypeScript interfaces matching all Rust domain types
+  utils/
+    format-hotkey.ts  — Platform-specific hotkey formatting (macOS ⌘⇧ symbols vs Windows Ctrl+Shift labels)
   pages/
-    settings.tsx      — Main settings page with nav to models/hotkeys, target mode toggle
-    models.tsx        — Model list with download/activate/delete actions
-    hotkeys.tsx       — Hotkey bindings with toggle enable/disable and key recorder
-    overlay.tsx       — Transparent recording overlay with soundwave visualization
+    overlay.tsx       — Transparent recording overlay with visualization, processing animation, metadata display
     picker.tsx        — Window picker (Cmd+Tab style) for target window selection
   components/
-    recording-pill.tsx — Pill-shaped recording indicator with status dot + soundwave
-    soundwave.tsx     — Canvas-based 32-bar amplitude visualization with smooth interpolation
-    model-card.tsx    — Individual model display with download/activate/delete states
+    sidebar.tsx       — Collapsible navigation sidebar with colored icon backgrounds (5 sections) + branding footer
+    status-bar.tsx    — Top bar with sidebar toggle and audio device selector dropdown
+    settings-group.tsx — Reusable card containers (SettingsGroup + SettingsRow) for settings panels
+    toggle-switch.tsx — Styled toggle switch input component
+    company-badge.tsx — OpenAI/NVIDIA company badges with SVG icons for model cards
+    recording-pill.tsx — Pill-shaped recording indicator with visualization, status, hotkey display, mic name (Full/Mini modes)
+    model-card.tsx    — Individual model display with download/activate/delete states + company badge
     hotkey-recorder.tsx — Interactive hotkey capture component (records key combinations)
+    visualizations/
+      index.ts        — Visualization registry and VisualizationProps interface
+      bars.tsx        — Classic bar visualization with amplitude smoothing
+      sine.tsx        — Layered sine waves with color gradients (blue, purple, pink, amber)
+      rainbow.tsx     — Rainbow-colored bars with gradient spectrum interpolation
+    processing-animations/
+      index.ts        — Animation registry and interfaces
+      pulse.tsx       — CSS pulsing glow effect during processing
+      frozen-frame.tsx — Frozen last visualization frame at reduced opacity
+      typing-parrot.tsx — 8-bit pixel art parrot typing on keyboard animation
+    panels/
+      general-panel.tsx — Model selector, recording mode, target mode, visualization picker, animation picker, overlay mode/position/opacity
+      models-panel.tsx — Model list with download/activate/delete actions
+      history-panel.tsx — Transcription history with waveform playback, peak extraction, audio decoding
+      hotkeys-panel.tsx — Hotkey bindings with toggle enable/disable and key recorder
+      about-panel.tsx — App info, version display, launch-at-login toggle
   hooks/
-    use-recording.ts  — Core recording state machine (idle→recording→transcribing→injecting→idle)
+    use-recording.ts  — Core recording state machine (idle→recording→transcribing→injecting→idle) with cancel support
     use-models.ts     — Model CRUD operations via Tauri commands
     use-preferences.ts — Preferences read/update via Tauri commands
     use-audio-stream.ts — Listens for amplitude-update events for overlay visualization
+    use-history.ts    — History entries load, delete, clear via Tauri commands
 ```
 
 ---
@@ -96,15 +120,19 @@ src/
 ### Recording → Transcription → Injection Pipeline
 
 1. **Hotkey press** → Rust global shortcut handler fires → `resolve_hotkey_event()` determines action → emits `hotkey-start-recording` event
-2. **Frontend** `useRecording` hook listens → calls `invoke("start_recording")` with a Channel
-3. **Backend** `start_recording` command → validates (model loaded, not already recording) → starts `AudioCapture` via cpal → streams `AmplitudeUpdate` events → shows overlay window → returns session ID
-4. **During recording** → amplitude data flows: cpal callback → amplitude buffer → downsample to 32 bins → Channel → frontend → Canvas soundwave visualization
+2. **Frontend** `useRecording` hook listens → calls `invoke("start_recording")` with a Channel and optional device name
+3. **Backend** `start_recording` command → validates (model loaded, not already recording) → starts `AudioCapture` via cpal (optionally targeting a specific audio device) → streams `AmplitudeUpdate` events → shows overlay window → updates tray icon with red recording dot → returns session ID
+4. **During recording** → amplitude data flows: cpal callback → amplitude buffer → downsample to 32 bins → Channel → frontend → Canvas visualization (Bars, Sine, or Rainbow style)
 5. **Hotkey press again** → emits `hotkey-stop-recording` → frontend calls `invoke("stop_recording")`
-6. **Backend** `stop_recording` → stops capture → resamples audio to 16kHz via rubato → runs transcription engine → returns `TranscriptionResult` → hides overlay
+6. **Backend** `stop_recording` → stops capture → saves WAV audio file → resamples audio to 16kHz via rubato → runs transcription engine → creates history entry → returns `TranscriptionResult` → hides overlay → restores normal tray icon
 7. **Frontend** receives text → checks target mode:
    - **ActiveWindow mode**: calls `invoke("inject_text")` directly
    - **WindowPicker mode**: emits `show-picker` event → picker window appears → user selects target → calls `inject_text` with target process ID
 8. **Backend** `inject_text` → optionally activates target window → injects text via keyboard simulation (enigo) or clipboard paste (arboard)
+
+### Cancel Flow
+
+- **Escape key** during recording → emits `hotkey-cancel-recording` → frontend calls `invoke("cancel_recording")` → backend stops capture, discards audio, hides overlay, restores tray icon → no transcription or injection occurs
 
 ### Hotkey Event Routing
 
@@ -130,34 +158,46 @@ Models are defined in a hardcoded registry (`models.rs:builtin_model_definitions
 
 | Crate | Version | Purpose |
 |-------|---------|---------|
-| `tauri` | 2 | Desktop app framework (tray, windows, IPC) |
+| `tauri` | 2 | Desktop app framework (tray, windows, IPC); features: tray-icon, macos-private-api, image-png |
 | `tauri-plugin-global-shortcut` | 2 | System-wide hotkey registration |
 | `tauri-plugin-single-instance` | 2.4 | Prevents multiple app instances |
 | `tauri-plugin-shell` | 2 | Shell access for system commands |
 | `whisper-rs` | 0.15 | Whisper.cpp FFI bindings for speech-to-text |
-| `parakeet-rs` | 0.3 | NVIDIA Parakeet ONNX models (CTC, TDT, EOU variants) |
+| `parakeet-rs` | 0.3 | NVIDIA Parakeet ONNX models (CTC, TDT, EOU variants); features: cpu |
 | `cpal` | 0.17 | Cross-platform audio capture (CoreAudio/WASAPI/ALSA) |
 | `rubato` | 0.15 | FFT-based audio resampling (device rate → 16kHz) |
+| `hound` | 3 | WAV file encoding/decoding for history audio storage |
 | `hf-hub` | 0.4 | HuggingFace model downloading |
-| `enigo` | 0.6 | Keyboard simulation for text injection |
+| `enigo` | 0.6 | Keyboard simulation for text injection; features: serde |
 | `arboard` | 3 | Clipboard access for paste-based injection |
 | `x-win` | 5 | Window enumeration across platforms |
-| `serde` / `serde_json` | 1 | Serialization for preferences and model registry |
-| `tokio` | 1 | Async runtime |
+| `objc2` | 0.6 | macOS Objective-C runtime bindings |
+| `objc2-app-kit` | 0.3 | macOS AppKit APIs (NSButton, NSControl, NSWindow, NSResponder, NSView) |
+| `serde` / `serde_json` | 1 | Serialization for preferences, model registry, and history |
+| `tokio` | 1 | Async runtime (full features) |
 | `reqwest` | 0.12 | HTTP client (streaming downloads) |
+| `uuid` | 1 | UUID v4 generation for history entries and sessions |
+| `chrono` | 0.4 | Date/time handling with serde support |
+| `log` / `env_logger` | 0.4 / 0.11 | Logging infrastructure |
+| `futures-util` | 0.3 | Async stream utilities |
 
 ### Frontend (TypeScript/React)
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| React | 19 | UI framework |
+| React | 19.1.0 | UI framework |
 | React Router DOM | 7 | Client-side routing between pages |
-| Tailwind CSS | 4 | Utility-first CSS |
+| Tailwind CSS | 4 | Utility-first CSS (via @tailwindcss/vite plugin) |
 | @tauri-apps/api | 2 | Tauri IPC (invoke, listen, Channel) |
-| Vite | 7 | Build tool and dev server |
+| @tauri-apps/plugin-global-shortcut | 2 | Global hotkey binding from frontend |
+| Vite | 7.0.4 | Build tool and dev server |
 | Vitest | 3 | Test runner |
 | @testing-library/react | 16 | Component testing utilities |
-| TypeScript | 5.8 | Type safety |
+| @testing-library/jest-dom | 6 | DOM assertion matchers |
+| TypeScript | 5.8.3 | Type safety |
+| ESLint | 9 | Linting (with react-hooks and typescript-eslint plugins) |
+| Prettier | 3 | Code formatting |
+| jsdom | 26 | DOM implementation for testing |
 
 ---
 
@@ -199,33 +239,37 @@ Downloaded → NotDownloaded (user deletes model)
 ```rust
 pub struct AppState {
     pub preferences: RwLock<UserPreferences>,    // Thread-safe preferences
-    pub app_data_dir: PathBuf,                   // Data directory for models + prefs
+    pub app_data_dir: PathBuf,                   // Data directory for models + prefs + history
     pub recording_active: RwLock<bool>,           // Recording state flag
     pub engine: RwLock<Option<Box<dyn TranscriptionEngine>>>,  // Loaded engine
     pub active_capture: Mutex<Option<AudioCapture>>,           // Active audio stream
+    pub recording_started_at: Mutex<Option<std::time::Instant>>,  // Recording start time for duration tracking
 }
 ```
 
 Key design decisions:
 - `RwLock` for preferences and engine (multiple readers, exclusive writer)
-- `Mutex` for active capture (only one recording at a time)
+- `Mutex` for active capture and recording timestamp (only one recording at a time)
 - Engine is dynamically dispatched (`Box<dyn TranscriptionEngine>`) to support both Whisper and Parakeet
-- Recording state is a simple boolean flag (not the full `RecordingSession`)
+- `recording_started_at` tracks elapsed time for history entry duration
 
 ### Frontend State
 
-Each page manages its own state via custom hooks:
-- `useRecording`: State machine (`idle` → `recording` → `transcribing` → `injecting` → `idle`) with Tauri event listeners for hotkey-driven flow
+The main settings window uses a **sidebar + panel** architecture. Each panel manages its own state via custom hooks:
+- `useRecording`: State machine (`idle` → `recording` → `transcribing` → `injecting` → `idle`) with Tauri event listeners for hotkey-driven flow, plus cancel support
 - `useModels`: Model list, download/activate/delete operations with loading states
 - `usePreferences`: Preferences CRUD with optimistic updates
 - `useAudioStream`: Amplitude data from `amplitude-update` events
+- `useHistory`: History entry list, delete, clear operations
 
 ### Persistence
 
 - **Preferences**: `{app_data_dir}/preferences.json` — full `UserPreferences` struct
 - **Model registry**: `{app_data_dir}/models/registry.json` — `Vec<TranscriptionModel>` metadata
 - **Model files**: `{app_data_dir}/models/` — GGML binaries (Whisper) or directories (Parakeet)
-- **No database** — all persistence is flat JSON files
+- **History**: `{app_data_dir}/history.json` — `Vec<HistoryEntry>` metadata (max 5000 entries)
+- **Audio recordings**: `{app_data_dir}/recordings/{uuid}.wav` — 16kHz mono WAV files
+- **No database** — all persistence is flat JSON files + WAV audio files
 
 ---
 
@@ -233,7 +277,8 @@ Each page manages its own state via custom hooks:
 
 ### Capture (`capture.rs`)
 
-- Uses cpal's default input device with native configuration
+- Uses cpal's default input device or a user-selected device
+- `list_input_devices()` enumerates available audio input devices with default detection
 - Stereo → mono conversion (average channels)
 - Pre-allocates buffer for up to 10 minutes of recording (avoids reallocations)
 - Amplitude callback fires every ~50ms with 32-bin downsampled visualization data
@@ -245,6 +290,13 @@ Each page manages its own state via custom hooks:
 - Converts from device native rate (typically 44.1kHz or 48kHz) to 16kHz mono for Whisper/Parakeet
 - Processes in 1024-sample chunks with zero-padding for the final partial chunk
 - Passthrough optimization when source is already 16kHz
+
+### Audio Storage (`history/mod.rs`)
+
+- After recording stops, raw audio is saved as a WAV file via the `hound` crate
+- 16kHz mono, 32-bit float samples
+- Files stored in `{app_data_dir}/recordings/` with UUID filenames
+- Audio bytes retrievable via `get_history_audio` command for frontend playback
 
 ---
 
@@ -268,7 +320,7 @@ Each page manages its own state via custom hooks:
 
 ### Registration
 
-Global hotkeys registered via `tauri-plugin-global-shortcut` during app setup. Re-registered on preferences update (unregister old → register new).
+Global hotkeys registered via `tauri-plugin-global-shortcut` during app setup. Re-registered on preferences update (unregister old → register new). Escape key dynamically registered/unregistered during recording for cancel support.
 
 ### Default Bindings
 
@@ -295,10 +347,35 @@ When enabling a recording action (Toggle or PushToTalk), the system automaticall
 
 ## UI Components
 
+### Settings Window (Main)
+
+The main window uses a **Superwhisper-inspired** sidebar + panel layout:
+
+- **Sidebar**: Collapsible navigation with 5 sections (General, History, Models, Hotkeys, About), colored icon backgrounds, branding footer with version
+- **StatusBar**: Top bar with sidebar toggle button and audio device selector dropdown
+- **SettingsGroup/SettingsRow**: Reusable card containers for grouped settings with label-right layout
+
+### Settings Panels
+
+- **GeneralPanel**: Model selector with company badges, recording mode (toggle/push-to-talk), target mode (active window/picker), visualization style picker with preview cards, processing animation picker, overlay mode selector (Full/Mini/None), overlay position, overlay opacity slider
+- **ModelsPanel**: Model list with ModelCard components showing download progress, activate/delete actions
+- **HistoryPanel**: Transcription history entries with waveform playback visualization, peak extraction, audio decoding, search, delete, clear all
+- **HotkeysPanel**: Hotkey binding rows with kbd-style badges, HotkeyRecorder for capture, ToggleSwitch for enable/disable
+- **AboutPanel**: App info card with version, launch-at-login toggle
+
 ### Recording Overlay
 
-- **RecordingPill**: Rounded pill with status dot (red pulsing = recording, yellow = processing) + soundwave + text label
-- **Soundwave**: Canvas-based visualization rendering 32 bars with smooth amplitude interpolation (lerp factor 0.15 per frame). Uses `requestAnimationFrame` for 60fps animation. DPR-aware rendering.
+- **RecordingPill**: Rounded pill with visualization area + status row. Supports Full mode (larger with metadata) and Mini mode (compact). Shows hotkey badge, microphone name, and recording/processing status.
+- **Visualizations** (3 selectable styles via registry pattern):
+  - **Bars**: Classic amplitude bars with smooth interpolation
+  - **Sine**: Layered sine waves with blue/purple/pink/amber color gradients
+  - **Rainbow**: Spectrum gradient bars (blue → purple → pink → orange)
+- **Processing Animations** (3 selectable styles):
+  - **Pulse**: CSS pulsing glow effect
+  - **FrozenFrame**: Freezes last visualization at reduced opacity
+  - **TypingParrot**: 8-bit pixel art parrot typing on keyboard (canvas-based, wing flapping + key flash)
+- All visualizations use `requestAnimationFrame` for 60fps animation and are DPR-aware
+- **OverlayMode**: Full (large pill with metadata), Mini (compact), None (hidden)
 
 ### Window Picker
 
@@ -310,8 +387,46 @@ When enabling a recording action (Toggle or PushToTalk), the system automaticall
 ### Model Card
 
 - Displays model name, family (Whisper/Parakeet), size, quantization, languages
+- Company badge (OpenAI for Whisper, NVIDIA for Parakeet) with SVG icons
 - State-aware buttons: Download (not downloaded), Activate/Delete (downloaded), Active badge (active)
 - Loading spinners for download and activation operations
+
+### Utility Components
+
+- **CompanyBadge**: OpenAI/NVIDIA badges with SVG logos for model provenance
+- **ToggleSwitch**: Styled checkbox toggle component
+- **FormatHotkey** (`utils/format-hotkey.ts`): Platform-aware hotkey formatting — macOS uses symbols (⌘⇧⌥), Windows/Linux uses text labels (Ctrl+Shift+Alt)
+
+---
+
+## Transcription History
+
+### Data Model
+
+```typescript
+interface HistoryEntry {
+  id: string;           // UUID v4
+  createdAt: string;    // ISO 8601 timestamp
+  text: string;         // Transcribed text
+  modelId: string;      // Model used for transcription
+  recordingDurationMs: number;
+  transcriptionDurationMs: number;
+  audioDevice: string | null;
+  audioFileName: string | null;  // WAV file in recordings/
+}
+```
+
+### Storage
+
+- **Metadata**: `{app_data_dir}/history.json` — JSON array of `HistoryEntry` objects
+- **Audio**: `{app_data_dir}/recordings/{uuid}.wav` — 16kHz mono WAV files
+- **Limit**: Auto-prunes to 5,000 entries maximum
+
+### Frontend
+
+- **HistoryPanel**: Scrollable list of transcription entries with timestamps, model info, durations
+- **WaveformPlayer**: Canvas-based waveform visualization extracted from WAV audio data, with playback controls
+- Operations: copy text, delete individual entries, clear all history
 
 ---
 
@@ -321,24 +436,25 @@ When enabling a recording action (Toggle or PushToTalk), the system automaticall
 
 Located in `src-tauri/tests/`:
 
-1. **Unit tests** (`tests/unit/`): Audio capture helpers, resampling, engine error handling, push-to-talk logic, keyboard injection, hotkey validation, window filtering
-2. **Contract tests** (`tests/contract/`): Tauri command validation — error codes, state transitions, input validation for audio, model, and injection commands
-3. **Integration tests** (`tests/integration/`): Cross-module recording flow, hotkey rebinding, model lifecycle
+1. **Unit tests** (`tests/unit/`): 8 test files, 859 lines — Audio capture helpers, resampling, engine error handling, push-to-talk logic, keyboard injection, hotkey validation, window filtering, model download
+2. **Contract tests** (`tests/contract/`): 5 test files, 542 lines — Tauri command validation — error codes, state transitions, input validation for audio, model, injection, and window commands
+3. **Integration tests** (`tests/integration/`): 4 test files, 357 lines — Cross-module recording flow, hotkey rebinding, model lifecycle
 
 Also inline unit tests in `capture.rs`, `resample.rs`, `models.rs`, `storage.rs`, and `preferences/mod.rs`.
 
 ### Frontend Tests (Vitest + Testing Library)
 
-Located in `src/components/*.test.tsx`:
-- `soundwave.test.tsx`: Canvas rendering, animation lifecycle, custom props
-- `recording-pill.test.tsx`: Recording vs processing states, indicator colors
-- `model-card.test.tsx`: All download status states, button visibility, callbacks
-- `hotkey-recorder.test.tsx`: Recording mode, key capture, modifier filtering, cancel behavior
+5 test files, 689 lines:
+- `components/soundwave.test.tsx`: Canvas rendering, animation lifecycle, custom props
+- `components/recording-pill.test.tsx`: Recording vs processing states, Full/Mini/None modes, visualization changes, indicator colors
+- `components/model-card.test.tsx`: All download status states, button visibility, callbacks
+- `components/hotkey-recorder.test.tsx`: Recording mode, key capture, modifier filtering, cancel behavior
+- `utils/format-hotkey.test.ts`: macOS symbol formatting (⌘⇧Space), Windows label formatting (Ctrl+Shift+Space), cross-platform Alt/Option
 
 ### Test Infrastructure
 
 - Vitest with jsdom environment
-- Canvas mocking for soundwave tests (getContext, requestAnimationFrame)
+- Canvas mocking for visualization tests (getContext, requestAnimationFrame)
 - `@testing-library/jest-dom` matchers
 - Some Rust tests marked `#[ignore]` for hardware-dependent scenarios
 
@@ -351,11 +467,14 @@ Located in `src/components/*.test.tsx`:
 - Accessibility permission required for keyboard simulation (enigo/CGEvents)
 - Microphone permission prompted on first use
 - Window activation via AppleScript (`osascript` → System Events)
+- Traffic light positioning via `objc2-app-kit` (NSWindow/NSButton APIs)
+- Hotkey display uses macOS symbols (⌘⇧⌥)
 
 ### Windows
 - WASAPI for audio capture
 - No special permissions needed at same integrity level
 - Window activation: **not yet implemented** (stubbed as error)
+- Hotkey display uses text labels (Ctrl+Shift+Alt)
 
 ### Linux
 - ALSA for audio capture
@@ -394,18 +513,27 @@ The project uses a structured "Speckit" workflow:
 
 ## Current Status and Known Issues
 
-### Completed (checked off in TODO.md)
-- Model selection visibility and naming
-- Download feedback (prevents button spam)
-- Push-to-talk functionality
-- Target window selection improvements
+### Completed
+- Core voice input pipeline (record → transcribe → inject)
+- Model management (download, activate, delete from HuggingFace)
+- Push-to-talk and toggle recording modes
+- Target window selection (active window + window picker)
 - Transcription performance fixes
+- System tray with recording state indicator (red dot on icon)
+- Superwhisper-inspired UI redesign with collapsible sidebar
+- Multiple visualization styles (Bars, Sine, Rainbow)
+- Processing animations (Pulse, FrozenFrame, TypingParrot)
+- Transcription history with waveform playback
+- Audio device selection
+- Overlay mode selector (Full/Mini/None)
+- Company badges (OpenAI/NVIDIA) on model cards
+- Platform-aware hotkey display formatting
+- Escape-to-cancel recording
 
 ### Open TODO Items
-- Add menu icon for recording state
-- UI polish needed (general)
-- Replace download spinner with progress bar
-- Add ability to add custom/new models
+- UI needs further polish
+- Replace download spinner with progress bar for model downloads
+- Options to add custom/new models
 - Come up with product name and logo
 - Product website
 - Test distribution releases
@@ -413,7 +541,7 @@ The project uses a structured "Speckit" workflow:
 
 ### Technical Observations
 
-1. **Parakeet support was added post-spec**: The original spec and research only mentioned Whisper. The Parakeet engine family (CTC, TDT, EOU) was added later, including the `parakeet-rs` dependency and `ParakeetEngine` implementation. The TypeScript types haven't been fully updated (e.g., `ModelVariant` type is missing `ParakeetEOU`).
+1. **Parakeet support was added post-spec**: The original spec only mentioned Whisper. The Parakeet engine family (CTC, TDT, EOU) was added later. The TypeScript `ModelVariant` type includes `ParakeetCTC` and `ParakeetTDT` but is missing `ParakeetEOU`.
 
 2. **Window activation on Windows is unimplemented**: `injection/windows.rs` has a stub that returns an error for Windows platform.
 
@@ -425,60 +553,81 @@ The project uses a structured "Speckit" workflow:
 
 6. **Model auto-loading on startup**: If an `active_model_id` is set in preferences and the model is downloaded, the engine is automatically loaded during app setup — no manual activation needed on restart.
 
-7. **macOS-specific**: The overlay requires `macOSPrivateApi: true` for transparency, which prevents Mac App Store distribution. Window activation uses AppleScript.
+7. **macOS-specific features**: The overlay requires `macOSPrivateApi: true` for transparency, which prevents Mac App Store distribution. Window activation uses AppleScript. Traffic light button visibility is controlled via `objc2-app-kit` native APIs.
 
 8. **Audio buffer pre-allocation**: The capture module pre-allocates for 10 minutes of recording at native sample rate to avoid reallocations during recording.
+
+9. **History audio persistence**: Each transcription saves the raw audio as a WAV file, enabling future playback in the history panel. Files are stored alongside the JSON metadata.
 
 ---
 
 ## File Inventory
 
-### Backend (Rust) — 14 source files
+### Backend (Rust) — 24 source files, ~3,001 lines
 | File | Lines | Purpose |
 |------|-------|---------|
-| `lib.rs` | 390 | App entry: tray, hotkeys, overlay, window lifecycle |
+| `lib.rs` | 481 | App entry: AppState, tray (with recording icon), hotkeys, overlay positioning, window lifecycle |
 | `main.rs` | 6 | Binary entry point |
-| `hotkeys.rs` | 58 | Pure hotkey event routing |
+| `hotkeys.rs` | 59 | Pure hotkey event routing |
 | `audio/mod.rs` | 51 | Audio domain types |
-| `audio/capture.rs` | 176 | Microphone capture + amplitude |
+| `audio/capture.rs` | 225 | Microphone capture, device enumeration, amplitude calculation |
 | `audio/resample.rs` | 123 | FFT resampling to 16kHz |
-| `transcription/mod.rs` | 80 | Transcription domain types |
+| `transcription/mod.rs` | 79 | Transcription domain types (with backward-compatible DownloadStatus deserializer) |
 | `transcription/engine.rs` | 169 | Whisper + Parakeet engine implementations |
 | `transcription/models.rs` | 241 | Model registry + persistence |
 | `injection/mod.rs` | 15 | Injection domain types |
 | `injection/keyboard.rs` | 13 | Keystroke injection |
 | `injection/clipboard.rs` | 50 | Clipboard paste injection |
 | `injection/windows.rs` | 114 | Window enumeration + activation |
-| `preferences/mod.rs` | 163 | Preferences types + validation |
+| `history/mod.rs` | 139 | History entry storage, WAV file management |
+| `preferences/mod.rs` | 217 | Preferences types, enums (OverlayMode, VisualizationStyle, ProcessingAnimation, etc.), validation |
 | `preferences/storage.rs` | 80 | JSON persistence |
-| `commands/mod.rs` | 30 | CommandError type |
-| `commands/audio_commands.rs` | 198 | Recording start/stop commands |
+| `commands/mod.rs` | 32 | CommandError type |
+| `commands/audio_commands.rs` | 312 | Recording start/stop/cancel, device listing |
 | `commands/model_commands.rs` | 281 | Model CRUD commands |
 | `commands/injection_commands.rs` | 70 | Text injection commands |
 | `commands/preferences_commands.rs` | 87 | Preferences commands |
 | `commands/system_commands.rs` | 81 | Permission commands |
+| `commands/window_commands.rs` | 40 | macOS traffic light visibility |
+| `commands/history_commands.rs` | 36 | History CRUD + audio retrieval |
 
-### Frontend (TypeScript/React) — 14 source files
+### Frontend (TypeScript/React) — 32 source files, ~3,754 lines
 | File | Lines | Purpose |
 |------|-------|---------|
 | `main.tsx` | 10 | App mount |
-| `App.tsx` | 57 | Router + window routing |
-| `types/index.ts` | 130 | All TypeScript interfaces |
-| `pages/settings.tsx` | 104 | Main settings page |
-| `pages/models.tsx` | 72 | Model management page |
-| `pages/hotkeys.tsx` | 133 | Hotkey configuration page |
-| `pages/overlay.tsx` | 45 | Recording overlay |
+| `App.tsx` | 111 | Router, sidebar layout, hotkey listener, section navigation |
+| `types/index.ts` | 163 | All TypeScript interfaces (HistoryEntry, UserPreferences, AudioEvent, etc.) |
+| `utils/format-hotkey.ts` | 36 | Platform-aware hotkey formatting (⌘⇧ vs Ctrl+Shift) |
+| `pages/overlay.tsx` | 135 | Recording overlay with visualization, processing animation, metadata |
 | `pages/picker.tsx` | 181 | Window picker |
-| `components/recording-pill.tsx` | 31 | Recording indicator |
-| `components/soundwave.tsx` | 84 | Canvas amplitude viz |
-| `components/model-card.tsx` | 150 | Model list item |
+| `components/sidebar.tsx` | 129 | Collapsible nav sidebar with colored icons + branding |
+| `components/status-bar.tsx` | 128 | Top bar with audio device selector |
+| `components/settings-group.tsx` | 42 | SettingsGroup + SettingsRow card containers |
+| `components/toggle-switch.tsx` | 20 | Styled toggle switch |
+| `components/company-badge.tsx` | 67 | OpenAI/NVIDIA badges with SVG icons |
+| `components/recording-pill.tsx` | 131 | Recording indicator with Full/Mini modes, visualization, status |
+| `components/model-card.tsx` | 158 | Model list item with company badge |
 | `components/hotkey-recorder.tsx` | 129 | Hotkey capture UI |
-| `hooks/use-recording.ts` | 128 |  Recording state machine |
+| `components/visualizations/index.ts` | 24 | Visualization registry |
+| `components/visualizations/bars.tsx` | 106 | Bar visualization |
+| `components/visualizations/sine.tsx` | 103 | Sine wave visualization |
+| `components/visualizations/rainbow.tsx` | 121 | Rainbow gradient visualization |
+| `components/processing-animations/index.ts` | 25 | Animation registry |
+| `components/processing-animations/pulse.tsx` | 13 | Pulse glow animation |
+| `components/processing-animations/frozen-frame.tsx` | 28 | Frozen frame animation |
+| `components/processing-animations/typing-parrot.tsx` | 172 | Pixel art parrot animation |
+| `components/panels/general-panel.tsx` | 651 | General settings (model, recording, input, appearance) |
+| `components/panels/models-panel.tsx` | 60 | Model management panel |
+| `components/panels/history-panel.tsx` | 472 | Transcription history with waveform playback |
+| `components/panels/hotkeys-panel.tsx` | 97 | Hotkey configuration panel |
+| `components/panels/about-panel.tsx` | 49 | About info + launch-at-login |
+| `hooks/use-recording.ts` | 148 | Recording state machine with cancel |
 | `hooks/use-models.ts` | 97 | Model operations |
 | `hooks/use-preferences.ts` | 53 | Preferences operations |
 | `hooks/use-audio-stream.ts` | 29 | Amplitude event listener |
+| `hooks/use-history.ts` | 66 | History operations |
 
-### Tests — 16 test files
-- 9 Rust test files (`src-tauri/tests/`)
-- 4 React component test files (`src/components/*.test.tsx`)
-- Inline unit tests in 4 Rust modules
+### Tests — 23 test files, ~2,452 lines
+- **Rust**: 18 test files in `src-tauri/tests/` (1,763 lines) — unit (8), contract (5), integration (4), + harness files (3)
+- **Frontend**: 5 test files (689 lines) — soundwave, recording-pill, model-card, hotkey-recorder, format-hotkey
+- Inline unit tests in Rust modules: `capture.rs`, `resample.rs`, `models.rs`, `storage.rs`, `preferences/mod.rs`
