@@ -44,16 +44,6 @@ const SIDEBAR_ITEMS: {
     ),
   },
   {
-    section: "hotkeys",
-    label: "Hotkeys",
-    iconBg: "bg-gray-500",
-    icon: (
-      <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5M3.75 4.875c0-.621.504-1.125 1.125-1.125h14.25c.621 0 1.125.504 1.125 1.125v14.25c0 .621-.504 1.125-1.125 1.125H4.875A1.125 1.125 0 0 1 3.75 19.125V4.875Z" />
-      </svg>
-    ),
-  },
-  {
     section: "changelog",
     label: "What's New",
     iconBg: "bg-emerald-500",

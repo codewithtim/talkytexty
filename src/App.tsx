@@ -11,7 +11,6 @@ import { PermissionBanner } from "./components/permission-banner";
 import { StatusBar } from "./components/status-bar";
 import { GeneralPanel } from "./components/panels/general-panel";
 import { ModelsPanel } from "./components/panels/models-panel";
-import { HotkeysPanel } from "./components/panels/hotkeys-panel";
 import { AboutPanel } from "./components/panels/about-panel";
 import { ChangelogPanel } from "./components/panels/changelog-panel";
 import { HistoryPanel } from "./components/panels/history-panel";
@@ -21,14 +20,12 @@ const ROUTE_TO_SECTION: Record<string, SettingsSection> = {
   "/": "general",
   "/history": "history",
   "/models": "models",
-  "/hotkeys": "hotkeys",
 };
 
 const PANELS: Record<SettingsSection, React.ReactNode> = {
   general: <GeneralPanel />,
   history: <HistoryPanel />,
   models: <ModelsPanel />,
-  hotkeys: <HotkeysPanel />,
   changelog: <ChangelogPanel />,
   about: <AboutPanel />,
 };

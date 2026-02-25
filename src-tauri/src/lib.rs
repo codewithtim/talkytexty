@@ -59,9 +59,6 @@ fn build_tray_menu(
     let models = MenuItemBuilder::new("Models")
         .id("show_models")
         .build(app)?;
-    let hotkeys = MenuItemBuilder::new("Hotkeys")
-        .id("show_hotkeys")
-        .build(app)?;
     let quit = MenuItemBuilder::new("Quit").id("quit").build(app)?;
 
     MenuBuilder::new(app)
@@ -71,7 +68,6 @@ fn build_tray_menu(
         .separator()
         .item(&show_settings)
         .item(&models)
-        .item(&hotkeys)
         .separator()
         .item(&quit)
         .build()
@@ -401,13 +397,6 @@ pub fn run() {
                                 let _ = window.show();
                                 let _ = window.set_focus();
                                 let _ = app.emit("navigate", "/models");
-                            }
-                        }
-                        "show_hotkeys" => {
-                            if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                                let _ = app.emit("navigate", "/hotkeys");
                             }
                         }
                         "quit" => {
