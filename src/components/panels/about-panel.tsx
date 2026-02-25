@@ -19,7 +19,7 @@ export function AboutPanel() {
       {/* Application settings */}
       <SettingsGroup title="Application">
         <SettingsRow label="Version">
-          <span className="text-sm text-gray-500 dark:text-gray-400">0.2.0</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">0.2.1</span>
         </SettingsRow>
         <SettingsRow label="Launch at Login" description="Start TalkyTexty when you log in">
           <ToggleSwitch

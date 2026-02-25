@@ -121,7 +121,7 @@ export function Sidebar({ activeSection, onSectionChange, collapsed }: SidebarPr
           TalkyTexty
         </div>
         <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
-          v0.2.0
+          v0.2.1
         </div>
       </div>
     </aside>

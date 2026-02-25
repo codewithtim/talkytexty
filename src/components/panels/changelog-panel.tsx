@@ -11,6 +11,14 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.2.1",
+    date: "2026-02-25",
+    changed: [
+      "Moved settings hotkey into the General panel's Recording section",
+      "Removed dedicated Hotkeys sidebar item and tray menu entry",
+    ],
+  },
+  {
     version: "0.2.0",
     date: "2026-02-25",
     added: [

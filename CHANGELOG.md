@@ -2,6 +2,13 @@
 
 All notable changes to TalkyTexty are documented here.
 
+## [0.2.1] - 2026-02-25
+
+### Changed
+
+- Moved settings hotkey into the General panel's Recording section
+- Removed dedicated Hotkeys sidebar item and tray menu entry
+
 ## [0.2.0] - 2026-02-25
 
 ### Added
