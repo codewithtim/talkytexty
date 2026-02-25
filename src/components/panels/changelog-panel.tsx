@@ -11,6 +11,24 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.2.0",
+    date: "2026-02-25",
+    added: [
+      "\"What's New\" changelog panel in the sidebar",
+      "CONTRIBUTING.md with setup and quality gate instructions",
+      "Custom parrot pixel art icon (transparent background)",
+    ],
+    changed: [
+      "Renamed app from \"Text to Code\" to \"TalkyTexty\"",
+      "Microphone selection now syncs between status bar and settings panel",
+      "About panel uses the parrot icon",
+    ],
+    fixed: [
+      "Alt+Space hotkey registration on macOS",
+      "Settings dropdowns hidden behind menu items",
+    ],
+  },
+  {
     version: "0.1.0",
     date: "2025-02-25",
     added: [
@@ -27,11 +45,6 @@ const CHANGELOG: ChangelogEntry[] = [
       "History panel with playback and transcript review",
       "Hotkey customization for all actions",
       "Launch at login option",
-      "Custom parrot pixel art icon",
-    ],
-    fixed: [
-      "Alt+Space hotkey registration on macOS",
-      "Settings dropdowns hidden behind menu items",
     ],
   },
 ];

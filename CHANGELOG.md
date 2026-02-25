@@ -2,6 +2,25 @@
 
 All notable changes to TalkyTexty are documented here.
 
+## [0.2.0] - 2026-02-25
+
+### Added
+
+- "What's New" changelog panel in the sidebar
+- CONTRIBUTING.md with setup and quality gate instructions
+- Custom parrot pixel art icon (transparent background)
+
+### Changed
+
+- Renamed app from "Text to Code" to "TalkyTexty" throughout the UI
+- Microphone selection now syncs between status bar and settings panel
+- About panel uses the parrot icon instead of a generic microphone
+
+### Fixed
+
+- Alt+Space hotkey registration on macOS (non-breaking space handling)
+- Settings dropdowns hidden behind menu items (overflow clipping)
+
 ## [0.1.0] - 2025-02-25
 
 ### Added
@@ -19,9 +38,3 @@ All notable changes to TalkyTexty are documented here.
 - History panel with playback and transcript review
 - Hotkey customization for all actions
 - Launch at login option
-- Custom parrot pixel art icon
-
-### Fixed
-
-- Alt+Space hotkey registration on macOS (non-breaking space handling)
-- Settings dropdowns hidden behind menu items (overflow clipping)
