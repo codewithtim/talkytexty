@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useContext, createContext } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { UserPreferences } from "@/types";
 
-interface UsePreferencesReturn {
+interface PreferencesContextValue {
   preferences: UserPreferences | null;
   loading: boolean;
   error: string | null;
@@ -10,7 +10,9 @@ interface UsePreferencesReturn {
   reload: () => Promise<void>;
 }
 
-export function usePreferences(): UsePreferencesReturn {
+const PreferencesContext = createContext<PreferencesContextValue | null>(null);
+
+export function PreferencesProvider({ children }: { children: React.ReactNode }) {
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,11 +45,17 @@ export function usePreferences(): UsePreferencesReturn {
     }
   }, []);
 
-  return {
-    preferences,
-    loading,
-    error,
-    updatePreferences,
-    reload: load,
-  };
+  return (
+    <PreferencesContext.Provider value={{ preferences, loading, error, updatePreferences, reload: load }}>
+      {children}
+    </PreferencesContext.Provider>
+  );
+}
+
+export function usePreferences(): PreferencesContextValue {
+  const ctx = useContext(PreferencesContext);
+  if (!ctx) {
+    throw new Error("usePreferences must be used within a PreferencesProvider");
+  }
+  return ctx;
 }
