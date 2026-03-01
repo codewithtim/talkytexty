@@ -169,6 +169,10 @@ src-tauri/                     # Rust backend
 
 **Text not appearing** — Some apps block simulated keystrokes. Try Clipboard Paste mode in Settings.
 
+## Disclaimer
+
+This project is entirely vibe-coded using [Claude](https://claude.ai) and is not a representation of my coding abilities.
+
 ## License
 
-Private — all rights reserved.
+MIT — see [LICENSE](LICENSE) for details.
