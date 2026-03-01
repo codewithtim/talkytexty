@@ -1,6 +1,7 @@
 {
   "name": "text-to-code",
-  "private": true,
+  "private": false,
+  "license": "MIT",
   "version": "0.2.1",
   "type": "module",
   "scripts": {

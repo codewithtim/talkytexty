@@ -3,6 +3,7 @@ name = "text-to-code"
 version = "0.2.1"
 description = "Voice-to-text desktop app for transcribing speech into any application"
 authors = ["you"]
+license = "MIT"
 edition = "2021"
 
 [lib]
