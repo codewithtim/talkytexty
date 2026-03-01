@@ -116,16 +116,28 @@ pub fn activate_window(process_id: u32) -> Result<(), String> {
         }
         _ => {
             // Fallback to wmctrl
-            let wmctrl_result = Command::new("wmctrl")
-                .arg("-I") // search by process name/id is tricky with wmctrl, but we can try -lp
-                .arg("-a")
-                .arg(process_id.to_string())
+            // wmctrl -lp lists windows with their PIDs
+            let wmctrl_list = Command::new("wmctrl")
+                .arg("-lp")
                 .output();
 
-            if let Ok(output) = wmctrl_result {
-                if output.status.success() {
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                    return Ok(());
+            if let Ok(output) = wmctrl_list {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    // wmctrl -lp output format:
+                    // 0x04e00003  0 26316  hostname  Window Title
+                    if parts.len() >= 3 && parts[2] == process_id.to_string() {
+                        let window_id = parts[0];
+                        let _ = Command::new("wmctrl")
+                            .arg("-i")
+                            .arg("-a")
+                            .arg(window_id)
+                            .output();
+                        
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        return Ok(());
+                    }
                 }
             }
         }
