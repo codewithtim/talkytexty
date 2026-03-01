@@ -24,6 +24,7 @@ fn make_test_state_with_dir(dir: &std::path::Path) -> AppState {
         recording_active: RwLock::new(false),
         engine: RwLock::new(None),
         active_capture: Mutex::new(None),
+        recording_started_at: Mutex::new(None),
     }
 }
 

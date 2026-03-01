@@ -101,14 +101,35 @@ pub fn activate_window(_process_id: u32) -> Result<(), String> {
 pub fn activate_window(process_id: u32) -> Result<(), String> {
     use std::process::Command;
 
-    Command::new("xdotool")
+    // Try xdotool first
+    let xdotool_result = Command::new("xdotool")
         .arg("search")
         .arg("--pid")
         .arg(process_id.to_string())
         .arg("windowactivate")
-        .output()
-        .map_err(|e| format!("Failed to activate window: {}", e))?;
+        .output();
 
-    std::thread::sleep(std::time::Duration::from_millis(100));
-    Ok(())
+    match xdotool_result {
+        Ok(output) if output.status.success() => {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            return Ok(());
+        }
+        _ => {
+            // Fallback to wmctrl
+            let wmctrl_result = Command::new("wmctrl")
+                .arg("-I") // search by process name/id is tricky with wmctrl, but we can try -lp
+                .arg("-a")
+                .arg(process_id.to_string())
+                .output();
+
+            if let Ok(output) = wmctrl_result {
+                if output.status.success() {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    Err("Failed to activate window. Ensure 'xdotool' or 'wmctrl' is installed and you are using an X11-based desktop.".to_string())
 }

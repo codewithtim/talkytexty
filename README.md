@@ -49,7 +49,9 @@ TalkyTexty runs in your system tray and works with any application — text edit
 
 **Windows:** Visual Studio Build Tools with C++ workload (cmake included)
 
-**Linux:** `sudo apt install libasound2-dev libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev cmake`
+**Linux:** `sudo apt install libasound2-dev libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev xdotool libxdo-dev libfuse2 libfuse3-3 libsquashfuse-dev patchelf librsvg2-dev desktop-file-utils libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev imagemagick cmake`
+
+**Linux AppImage:** `export APPIMAGE_EXTRACT_AND_RUN=1 && pnpm tauri build`
 
 ### Build from source
 
