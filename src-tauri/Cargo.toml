@@ -38,10 +38,6 @@ arboard = "3"
 # Window management
 x-win = "5"
 
-# macOS native window APIs
-objc2 = "0.6"
-objc2-app-kit = { version = "0.3", features = ["NSButton", "NSControl", "NSWindow", "NSResponder", "NSView"] }
-
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -57,6 +53,10 @@ env_logger = "0.11"
 reqwest = { version = "0.12", features = ["stream"] }
 futures-util = "0.3"
 tauri-plugin-single-instance = "2.4.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSButton", "NSControl", "NSWindow", "NSResponder", "NSView"] }
 
 [dev-dependencies]
 tempfile = "3"

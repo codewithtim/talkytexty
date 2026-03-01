@@ -146,5 +146,8 @@ fn request_microphone_permission() -> bool {
 
 #[cfg(not(target_os = "macos"))]
 fn request_microphone_permission() -> bool {
+    // On Linux/Windows, cpal doesn't have a built-in permission prompt.
+    // We just check if it can access devices. If not, it's likely
+    // a driver or system configuration issue (ALSA/Pipewire/Pulse on Linux).
     check_microphone_permission()
 }
