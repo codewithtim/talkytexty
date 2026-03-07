@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { motion } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
 import { useHistory } from "@/hooks/use-history";
 import { SettingsGroup } from "@/components/settings-group";
@@ -295,9 +296,8 @@ function HistoryCard({
         <button
           type="button"
           onClick={() => isLong && setExpanded((e) => !e)}
-          className={`text-left text-sm text-gray-900 dark:text-gray-100 min-w-0 flex-1 ${
-            isLong ? "cursor-pointer" : ""
-          }`}
+          className={`text-left text-sm text-gray-900 dark:text-gray-100 min-w-0 flex-1 ${isLong ? "cursor-pointer" : ""
+            }`}
         >
           {displayText}
         </button>
@@ -359,8 +359,8 @@ export function HistoryPanel() {
 
   const filtered = search.trim()
     ? entries.filter((e) =>
-        e.text.toLowerCase().includes(search.trim().toLowerCase()),
-      )
+      e.text.toLowerCase().includes(search.trim().toLowerCase()),
+    )
     : entries;
 
   if (loading) {
@@ -440,7 +440,11 @@ export function HistoryPanel() {
 
         {/* Entry list */}
         {filtered.length === 0 ? (
-          <div className="px-4 py-12 text-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="px-4 py-12 text-center"
+          >
             <div className="text-gray-400 dark:text-gray-500 mb-1">
               <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
@@ -454,15 +458,21 @@ export function HistoryPanel() {
                 Completed transcriptions will appear here
               </p>
             )}
-          </div>
+          </motion.div>
         ) : (
-          <div className="max-h-[calc(100vh-220px)] overflow-y-auto">
-            {filtered.map((entry) => (
-              <HistoryCard
+          <div className="max-h-[calc(100vh-220px)] overflow-y-auto pr-2">
+            {filtered.map((entry, index) => (
+              <motion.div
                 key={entry.id}
-                entry={entry}
-                onDelete={deleteEntry}
-              />
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.2, delay: index * 0.03, ease: "easeOut" }}
+              >
+                <HistoryCard
+                  entry={entry}
+                  onDelete={deleteEntry}
+                />
+              </motion.div>
             ))}
           </div>
         )}

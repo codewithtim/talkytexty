@@ -5,6 +5,7 @@
 // - Old and new bindings are distinct after update
 // - Hotkey validation is applied during preference update
 
+use std::collections::HashMap;
 use std::fs;
 use std::sync::{Mutex, RwLock};
 
@@ -21,6 +22,8 @@ fn make_test_state(dir: &std::path::Path) -> AppState {
         recording_active: RwLock::new(false),
         engine: RwLock::new(None),
         active_capture: Mutex::new(None),
+        recording_started_at: Mutex::new(None),
+        download_cancel_tokens: Mutex::new(HashMap::new()),
     }
 }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { TranscriptionModel } from "@/types";
+import type { DownloadProgress, TranscriptionModel } from "@/types";
 
 interface UseModelsReturn {
   models: TranscriptionModel[];
@@ -10,6 +10,7 @@ interface UseModelsReturn {
   activatingModelId: string | null;
   reload: () => Promise<void>;
   downloadModel: (modelId: string) => Promise<void>;
+  cancelDownload: (modelId: string) => Promise<void>;
   deleteModel: (modelId: string) => Promise<void>;
   setActiveModel: (modelId: string) => Promise<void>;
 }
@@ -38,6 +39,41 @@ export function useModels(): UseModelsReturn {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    const setupListener = async () => {
+      const { listen } = await import("@tauri-apps/api/event");
+      const un = await listen<DownloadProgress>("download-progress", (event) => {
+        setModels((prev) =>
+          prev.map((m) =>
+            m.id === event.payload.modelId
+              ? {
+                ...m,
+                downloadStatus: {
+                  status: "Downloading",
+                  progressPercent: event.payload.percent,
+                },
+                downloadMeta: {
+                  bytesDownloaded: event.payload.bytesDownloaded,
+                  bytesTotal: event.payload.bytesTotal,
+                  bytesPerSecond: event.payload.bytesPerSecond,
+                  etaSeconds: event.payload.etaSeconds,
+                },
+              }
+              : m,
+          ),
+        );
+      });
+      unlisten = un;
+    };
+
+    void setupListener();
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
   const downloadModel = useCallback(
     async (modelId: string) => {
       try {
@@ -52,6 +88,18 @@ export function useModels(): UseModelsReturn {
       }
     },
     [load],
+  );
+
+  const cancelDownload = useCallback(
+    async (modelId: string) => {
+      try {
+        setError(null);
+        await invoke("cancel_model_download", { modelId });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [],
   );
 
   const deleteModel = useCallback(
@@ -91,6 +139,7 @@ export function useModels(): UseModelsReturn {
     activatingModelId,
     reload: load,
     downloadModel,
+    cancelDownload,
     deleteModel,
     setActiveModel,
   };

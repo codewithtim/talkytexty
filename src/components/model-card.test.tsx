@@ -40,6 +40,7 @@ describe("ModelCard", () => {
         model={makeModel({ name: "Base English" })}
         isActive={false}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={noop}
       />,
@@ -53,6 +54,7 @@ describe("ModelCard", () => {
         model={makeModel({ sizeBytes: 60 * 1024 * 1024 })}
         isActive={false}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={noop}
       />,
@@ -66,6 +68,7 @@ describe("ModelCard", () => {
         model={makeModel({ quantization: "Q5_1" })}
         isActive={false}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={noop}
       />,
@@ -79,6 +82,7 @@ describe("ModelCard", () => {
         model={makeModel({ languages: ["en", "fr"] })}
         isActive={false}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={noop}
       />,
@@ -92,6 +96,7 @@ describe("ModelCard", () => {
         model={makeModel({ downloadStatus: { status: "NotDownloaded" } })}
         isActive={false}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={noop}
       />,
@@ -109,6 +114,7 @@ describe("ModelCard", () => {
         })}
         isActive={false}
         onDownload={onDownload}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={noop}
       />,
@@ -125,6 +131,7 @@ describe("ModelCard", () => {
         })}
         isActive={false}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={noop}
       />,
@@ -143,6 +150,7 @@ describe("ModelCard", () => {
         })}
         isActive={false}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={onActivate}
       />,
@@ -161,6 +169,7 @@ describe("ModelCard", () => {
         })}
         isActive={false}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={onDelete}
         onActivate={noop}
       />,
@@ -177,6 +186,7 @@ describe("ModelCard", () => {
         })}
         isActive={true}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={noop}
       />,
@@ -193,6 +203,7 @@ describe("ModelCard", () => {
         })}
         isActive={true}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={noop}
       />,
@@ -208,12 +219,32 @@ describe("ModelCard", () => {
         })}
         isActive={false}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={noop}
       />,
     );
     expect(screen.getByText("Downloading...")).toBeInTheDocument();
     expect(screen.getByText("45%")).toBeInTheDocument();
+  });
+
+  it("calls onCancelDownload when Cancel is clicked", () => {
+    const onCancelDownload = vi.fn();
+    render(
+      <ModelCard
+        model={makeModel({
+          id: "cancel-model",
+          downloadStatus: { status: "Downloading", progressPercent: 10 },
+        })}
+        isActive={false}
+        onDownload={noop}
+        onCancelDownload={onCancelDownload}
+        onDelete={noop}
+        onActivate={noop}
+      />,
+    );
+    fireEvent.click(screen.getByText("Cancel"));
+    expect(onCancelDownload).toHaveBeenCalledWith("cancel-model");
   });
 
   it("shows error message on download error", () => {
@@ -224,6 +255,7 @@ describe("ModelCard", () => {
         })}
         isActive={false}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={noop}
       />,
@@ -238,6 +270,7 @@ describe("ModelCard", () => {
         isActive={false}
         isStartingDownload={true}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={noop}
       />,
@@ -253,6 +286,7 @@ describe("ModelCard", () => {
         isActive={false}
         isStartingDownload={true}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={noop}
       />,
@@ -269,6 +303,7 @@ describe("ModelCard", () => {
         isActive={false}
         isActivating={true}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={noop}
       />,
@@ -286,6 +321,7 @@ describe("ModelCard", () => {
         isActive={false}
         isActivating={true}
         onDownload={noop}
+        onCancelDownload={noop}
         onDelete={noop}
         onActivate={noop}
       />,

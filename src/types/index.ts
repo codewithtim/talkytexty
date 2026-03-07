@@ -1,6 +1,6 @@
 // Domain types matching Rust backend (data-model.md)
 
-export type SettingsSection = "general" | "history" | "models" | "changelog" | "about";
+export type SettingsSection = "general" | "history" | "models" | "macros" | "changelog" | "about";
 
 export interface HistoryEntry {
   id: string;
@@ -24,6 +24,12 @@ export interface TranscriptionModel {
   downloadStatus: DownloadStatus;
   huggingfaceRepo: string;
   huggingfaceFilenames: string[];
+  downloadMeta?: {
+    bytesDownloaded: number;
+    bytesTotal: number;
+    bytesPerSecond: number;
+    etaSeconds: number | null;
+  };
 }
 
 export type ModelVariant =
@@ -99,7 +105,28 @@ export interface UserPreferences {
   overlayMode: OverlayMode;
   overlayCustomPosition: OverlayCustomPosition | null;
   selectedAudioDevice: string | null;
+  inputGain: number;  // Microphone sensitivity multiplier (0.5-2.0)
+  enableNoiseSuppression: boolean;
+  enableStreamingTranscription: boolean;  // Show partial results while recording
+  voiceMacros: VoiceMacro[];
   launchAtLogin: boolean;
+  enableVad: boolean;
+  vadSilenceDurationMs: number;
+  enableSounds: boolean;
+  enableTranslation: boolean;
+  targetLanguage: string | null;
+  enableAppSpecificFormatting: boolean;
+  enableHistory: boolean;
+  enableCorrectionHud: boolean;
+  enableReviewStep: boolean;
+  formattingOptions: FormattingOptions;
+  clipboardFallback: boolean;
+  closeBehavior: CloseBehavior;
+  showTrayTooltip: boolean;
+  offlineOnlyMode: boolean;
+  enableTelemetry: boolean;
+  autoCleanupModels: AutoCleanupSettings;
+  macroPreviewTestText: string;
 }
 
 export type RecordingMode = "PushToTalk" | "Toggle";
@@ -132,10 +159,46 @@ export interface AudioDevice {
   isDefault: boolean;
 }
 
+export interface VoiceMacro {
+  name: string;
+  trigger: string;
+  action: MacroAction;
+  enabled: boolean;
+  targetApps: string[];
+}
+
+export type MacroAction =
+  | { type: "TypeText"; value: string }
+  | { type: "PressKey"; value: string }
+  | { type: "DeleteBack" }
+  | { type: "InsertTemplate"; template: string; description: string }
+  | { type: "RunSequence"; value: MacroSequenceStep[] };
+
+export type MacroSequenceStep =
+  | { type: "TypeText"; value: string }
+  | { type: "PressKey"; value: string }
+  | { type: "WaitMs"; value: number };
+
 export interface TranscriptionResult {
   sessionId: string;
   text: string;
   durationMs: number;
+}
+
+export type CloseBehavior = "HideToTray" | "Quit";
+
+export interface FormattingOptions {
+  autoPunctuation: boolean;
+  capitalizeFirstLetter: boolean;
+  joinMode: JoinMode;
+}
+
+export type JoinMode = "Space" | "Newline";
+
+export interface AutoCleanupSettings {
+  enabled: boolean;
+  keepCount: number;
+  deleteAfterDaysUnused: number;
 }
 
 export type AudioEvent =
@@ -160,4 +223,6 @@ export interface DownloadProgress {
   percent: number;
   bytesDownloaded: number;
   bytesTotal: number;
+  bytesPerSecond: number;
+  etaSeconds: number | null;
 }

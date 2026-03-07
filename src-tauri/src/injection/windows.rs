@@ -101,14 +101,47 @@ pub fn activate_window(_process_id: u32) -> Result<(), String> {
 pub fn activate_window(process_id: u32) -> Result<(), String> {
     use std::process::Command;
 
-    Command::new("xdotool")
+    // Try xdotool first
+    let xdotool_result = Command::new("xdotool")
         .arg("search")
         .arg("--pid")
         .arg(process_id.to_string())
         .arg("windowactivate")
-        .output()
-        .map_err(|e| format!("Failed to activate window: {}", e))?;
+        .output();
 
-    std::thread::sleep(std::time::Duration::from_millis(100));
-    Ok(())
+    match xdotool_result {
+        Ok(output) if output.status.success() => {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            return Ok(());
+        }
+        _ => {
+            // Fallback to wmctrl
+            // wmctrl -lp lists windows with their PIDs
+            let wmctrl_list = Command::new("wmctrl")
+                .arg("-lp")
+                .output();
+
+            if let Ok(output) = wmctrl_list {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    // wmctrl -lp output format:
+                    // 0x04e00003  0 26316  hostname  Window Title
+                    if parts.len() >= 3 && parts[2] == process_id.to_string() {
+                        let window_id = parts[0];
+                        let _ = Command::new("wmctrl")
+                            .arg("-i")
+                            .arg("-a")
+                            .arg(window_id)
+                            .output();
+                        
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+
+    Err("Failed to activate window. Ensure 'xdotool' or 'wmctrl' is installed and you are using an X11-based desktop.".to_string())
 }

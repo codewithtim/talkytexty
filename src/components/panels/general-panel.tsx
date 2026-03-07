@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from "react";
+import { motion } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useModels } from "@/hooks/use-models";
@@ -142,10 +143,14 @@ function StatsWidget({ entries }: { entries: HistoryEntry[] }) {
 
   return (
     <div className="grid grid-cols-4 gap-3 mb-6">
-      {stats.map((stat) => (
-        <div
+      {stats.map((stat, index) => (
+        <motion.div
           key={stat.label}
-          className="rounded-xl border border-[#e5e5e7] dark:border-[#3a3a3a] bg-white dark:bg-[#2a2a2e] p-3.5 flex flex-col gap-2"
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: index * 0.08, type: "spring", bounce: 0.3 }}
+          whileHover={{ scale: 1.03, y: -3 }}
+          className="rounded-xl border border-[#e5e5e7] dark:border-[#3a3a3a] bg-white dark:bg-[#2a2a2e] p-3.5 flex flex-col gap-2 hover:shadow-md transition-shadow cursor-default"
         >
           <div className={`w-7 h-7 rounded-lg ${stat.bg} flex items-center justify-center ${stat.color}`}>
             {stat.icon}
@@ -158,8 +163,68 @@ function StatsWidget({ entries }: { entries: HistoryEntry[] }) {
               {stat.label}
             </div>
           </div>
-        </div>
+        </motion.div>
       ))}
+    </div>
+  );
+}
+
+function TestMicButton() {
+  const [testing, setTesting] = useState(false);
+  const [audioPath, setAudioPath] = useState<string | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const handleTest = async () => {
+    setTesting(true);
+    setAudioPath(null);
+    try {
+      const path = await invoke<string>("test_microphone");
+      setAudioPath(path);
+    } catch (e) {
+      console.error("Mic test failed:", e);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handlePlay = () => {
+    if (audioRef.current) {
+      if (playing) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        setPlaying(false);
+      } else {
+        audioRef.current.play();
+        setPlaying(true);
+      }
+    }
+  };
+
+  const handleEnded = () => {
+    setPlaying(false);
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        onClick={handleTest}
+        disabled={testing}
+        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white transition-colors"
+      >
+        {testing ? "Recording..." : "Test Mic"}
+      </button>
+      {audioPath && (
+        <>
+          <button
+            onClick={handlePlay}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-500 hover:bg-green-600 text-white transition-colors"
+          >
+            {playing ? "Stop" : "Play"}
+          </button>
+          <audio ref={audioRef} src={`file://${audioPath}`} onEnded={handleEnded} />
+        </>
+      )}
     </div>
   );
 }
@@ -314,6 +379,55 @@ export function GeneralPanel() {
             }}
           />
         </SettingsRow>
+        <SettingsRow label="Input Gain" description="Adjust microphone sensitivity (0.5x - 2.0x)">
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min="0.5"
+              max="2.0"
+              step="0.1"
+              value={preferences?.inputGain ?? 1.0}
+              onChange={async (e) => {
+                if (!preferences) return;
+                await updatePreferences({
+                  ...preferences,
+                  inputGain: parseFloat(e.target.value),
+                });
+              }}
+              className="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+            />
+            <span className="text-sm text-gray-500 dark:text-gray-400 w-12">
+              {(preferences?.inputGain ?? 1.0).toFixed(1)}x
+            </span>
+          </div>
+        </SettingsRow>
+        <SettingsRow label="Noise Suppression" description="Reduce background noise">
+          <ToggleSwitch
+            checked={preferences?.enableNoiseSuppression ?? false}
+            onChange={async () => {
+              if (!preferences) return;
+              await updatePreferences({
+                ...preferences,
+                enableNoiseSuppression: !preferences.enableNoiseSuppression,
+              });
+            }}
+          />
+        </SettingsRow>
+        <SettingsRow label="Streaming Transcription" description="Show partial results while recording">
+          <ToggleSwitch
+            checked={preferences?.enableStreamingTranscription ?? true}
+            onChange={async () => {
+              if (!preferences) return;
+              await updatePreferences({
+                ...preferences,
+                enableStreamingTranscription: !preferences.enableStreamingTranscription,
+              });
+            }}
+          />
+        </SettingsRow>
+        <SettingsRow label="Test Microphone" description="Record a 5-second test sample">
+          <TestMicButton />
+        </SettingsRow>
         <SettingsRow label="Text Injection">
           <span className="text-sm text-gray-500 dark:text-gray-400">
             {preferences?.textInjectionMethod === "ClipboardPaste"
@@ -393,11 +507,10 @@ function InlineRecordingModeSelector({
             key={mode}
             type="button"
             onClick={() => onChange(mode)}
-            className={`px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-              isActive
-                ? "bg-blue-500 text-white"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#3a3a3a]"
-            }`}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${isActive
+              ? "bg-blue-500 text-white"
+              : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#3a3a3a]"
+              }`}
           >
             {mode === "PushToTalk" ? "Push to Talk" : "Toggle"}
           </button>
@@ -426,11 +539,10 @@ function InlineTargetModeSelector({
             key={mode.value}
             type="button"
             onClick={() => onChange(mode.value)}
-            className={`px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-              isActive
-                ? "bg-blue-500 text-white"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#3a3a3a]"
-            }`}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${isActive
+              ? "bg-blue-500 text-white"
+              : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#3a3a3a]"
+              }`}
           >
             {mode.label}
           </button>
@@ -461,15 +573,16 @@ function OverlayModePicker({
       {OVERLAY_MODES.map(({ key, label }) => {
         const isActive = value === key;
         return (
-          <button
+          <motion.button
             key={key}
             type="button"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.96 }}
             onClick={() => onChange(key)}
-            className={`rounded-lg p-3 flex flex-col items-center gap-2 transition-colors cursor-pointer ${
-              isActive
-                ? "bg-gray-100 dark:bg-gray-800 border-2 border-gray-400 dark:border-gray-500"
-                : "bg-white dark:bg-[#333] border border-[#e5e5e7] dark:border-[#444] hover:border-gray-400 dark:hover:border-gray-500"
-            }`}
+            className={`rounded-lg p-3 flex flex-col items-center gap-2 transition-colors cursor-pointer ${isActive
+              ? "bg-gray-100 dark:bg-gray-800 border-2 border-gray-400 dark:border-gray-500"
+              : "bg-white dark:bg-[#333] border border-[#e5e5e7] dark:border-[#444] hover:border-gray-400 dark:hover:border-gray-500"
+              }`}
           >
             <div className="rounded bg-[#f6f6f6] dark:bg-[#2b2b2f] w-full flex flex-col items-center overflow-hidden">
               {key === "None" ? (
@@ -494,12 +607,11 @@ function OverlayModePicker({
                 </div>
               )}
             </div>
-            <span className={`text-xs font-medium ${
-              isActive ? "text-gray-900 dark:text-gray-100" : "text-gray-600 dark:text-gray-400"
-            }`}>
+            <span className={`text-xs font-medium ${isActive ? "text-gray-900 dark:text-gray-100" : "text-gray-600 dark:text-gray-400"
+              }`}>
               {label}
             </span>
-          </button>
+          </motion.button>
         );
       })}
     </div>
@@ -523,29 +635,29 @@ function VisualizationPicker({
         const isActive = value === styleKey;
 
         return (
-          <button
+          <motion.button
             key={styleKey}
             type="button"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.96 }}
             onClick={() => onChange(styleKey)}
-            className={`rounded-lg p-3 flex flex-col items-center gap-2 transition-colors cursor-pointer ${
-              isActive
-                ? "bg-gray-100 dark:bg-gray-800 border-2 border-gray-400 dark:border-gray-500"
-                : "bg-white dark:bg-[#333] border border-[#e5e5e7] dark:border-[#444] hover:border-gray-400 dark:hover:border-gray-500"
-            }`}
+            className={`rounded-lg p-3 flex flex-col items-center gap-2 transition-colors cursor-pointer ${isActive
+              ? "bg-gray-100 dark:bg-gray-800 border-2 border-gray-400 dark:border-gray-500"
+              : "bg-white dark:bg-[#333] border border-[#e5e5e7] dark:border-[#444] hover:border-gray-400 dark:hover:border-gray-500"
+              }`}
           >
             <div className="rounded bg-[#f6f6f6] dark:bg-[#2b2b2f] p-1.5 w-full flex items-center justify-center">
               <VizComponent amplitudes={amplitudes} width={120} height={32} />
             </div>
             <span
-              className={`text-xs font-medium ${
-                isActive
-                  ? "text-gray-900 dark:text-gray-100"
-                  : "text-gray-600 dark:text-gray-400"
-              }`}
+              className={`text-xs font-medium ${isActive
+                ? "text-gray-900 dark:text-gray-100"
+                : "text-gray-600 dark:text-gray-400"
+                }`}
             >
               {viz.name}
             </span>
-          </button>
+          </motion.button>
         );
       })}
     </div>
@@ -566,29 +678,29 @@ function ProcessingAnimationPicker({
         const isActive = value === key;
 
         return (
-          <button
+          <motion.button
             key={key}
             type="button"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.96 }}
             onClick={() => onChange(key)}
-            className={`rounded-lg p-3 flex flex-col items-center gap-1 transition-colors cursor-pointer ${
-              isActive
-                ? "bg-gray-100 dark:bg-gray-800 border-2 border-gray-400 dark:border-gray-500"
-                : "bg-white dark:bg-[#333] border border-[#e5e5e7] dark:border-[#444] hover:border-gray-400 dark:hover:border-gray-500"
-            }`}
+            className={`rounded-lg p-3 flex flex-col items-center gap-1 transition-colors cursor-pointer ${isActive
+              ? "bg-gray-100 dark:bg-gray-800 border-2 border-gray-400 dark:border-gray-500"
+              : "bg-white dark:bg-[#333] border border-[#e5e5e7] dark:border-[#444] hover:border-gray-400 dark:hover:border-gray-500"
+              }`}
           >
             <span
-              className={`text-sm font-medium ${
-                isActive
-                  ? "text-gray-900 dark:text-gray-100"
-                  : "text-gray-900 dark:text-gray-100"
-              }`}
+              className={`text-sm font-medium ${isActive
+                ? "text-gray-900 dark:text-gray-100"
+                : "text-gray-900 dark:text-gray-100"
+                }`}
             >
               {entry.name}
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {entry.description}
             </span>
-          </button>
+          </motion.button>
         );
       })}
     </div>
@@ -609,7 +721,7 @@ function MicrophoneSelector({
   useEffect(() => {
     invoke<AudioDevice[]>("list_audio_devices")
       .then(setDevices)
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -667,11 +779,10 @@ function MicrophoneSelector({
                   onChange(opt.deviceValue);
                   setOpen(false);
                 }}
-                className={`w-full text-left px-3 py-2.5 text-sm flex items-center justify-between transition-colors cursor-pointer ${
-                  isActive
-                    ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                    : "text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-[#333]"
-                }`}
+                className={`w-full text-left px-3 py-2.5 text-sm flex items-center justify-between transition-colors cursor-pointer ${isActive
+                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                  : "text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-[#333]"
+                  }`}
               >
                 <span className="truncate">
                   {opt.label}
@@ -774,18 +885,16 @@ function ModelSelector({
                       await onSelect(m.id);
                     }
                   }}
-                  className={`w-full text-left px-3 py-2.5 flex items-center justify-between transition-colors cursor-pointer ${
-                    isActive
-                      ? "bg-blue-50 dark:bg-blue-900/30"
-                      : "hover:bg-gray-100 dark:hover:bg-[#333]"
-                  }`}
+                  className={`w-full text-left px-3 py-2.5 flex items-center justify-between transition-colors cursor-pointer ${isActive
+                    ? "bg-blue-50 dark:bg-blue-900/30"
+                    : "hover:bg-gray-100 dark:hover:bg-[#333]"
+                    }`}
                 >
                   <div className="min-w-0">
-                    <div className={`text-sm font-medium truncate flex items-center gap-2 ${
-                      isActive
-                        ? "text-blue-600 dark:text-blue-400"
-                        : "text-gray-900 dark:text-gray-100"
-                    }`}>
+                    <div className={`text-sm font-medium truncate flex items-center gap-2 ${isActive
+                      ? "text-blue-600 dark:text-blue-400"
+                      : "text-gray-900 dark:text-gray-100"
+                      }`}>
                       <CompanyBadge modelFamily={m.modelFamily} size="sm" />
                       {m.modelFamily} — {m.name}
                     </div>

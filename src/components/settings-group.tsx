@@ -17,8 +17,8 @@ export function SettingsGroup({ title, children }: SettingsGroupProps) {
 }
 
 interface SettingsRowProps {
-  label: string;
-  description?: string;
+  label: React.ReactNode;
+  description?: React.ReactNode;
   children: React.ReactNode;
   border?: boolean;
 }
@@ -26,9 +26,8 @@ interface SettingsRowProps {
 export function SettingsRow({ label, description, children, border = true }: SettingsRowProps) {
   return (
     <div
-      className={`px-4 py-3 flex items-center justify-between gap-4 ${
-        border ? "border-b border-black/[0.06] dark:border-white/[0.06] last:border-b-0" : ""
-      }`}
+      className={`px-4 py-3 flex items-center justify-between gap-4 ${border ? "border-b border-black/[0.06] dark:border-white/[0.06] last:border-b-0" : ""
+        }`}
     >
       <div className="min-w-0">
         <div className="text-sm text-gray-900 dark:text-gray-100">{label}</div>

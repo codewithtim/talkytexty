@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { usePreferences } from "@/hooks/use-preferences";
 import type { AudioDevice } from "@/types";
@@ -8,7 +8,7 @@ interface StatusBarProps {
   sidebarCollapsed: boolean;
 }
 
-export function StatusBar({ onToggleSidebar, sidebarCollapsed }: StatusBarProps) {
+export const StatusBar = memo(function StatusBar({ onToggleSidebar, sidebarCollapsed }: StatusBarProps) {
   const { preferences, updatePreferences } = usePreferences();
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [open, setOpen] = useState(false);
@@ -19,7 +19,7 @@ export function StatusBar({ onToggleSidebar, sidebarCollapsed }: StatusBarProps)
   useEffect(() => {
     invoke<AudioDevice[]>("list_audio_devices")
       .then(setDevices)
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -100,11 +100,10 @@ export function StatusBar({ onToggleSidebar, sidebarCollapsed }: StatusBarProps)
                   key={opt.deviceValue ?? "__default__"}
                   type="button"
                   onClick={() => handleSelect(opt.deviceValue)}
-                  className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                    isActive
+                  className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors cursor-pointer ${isActive
                       ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
                       : "text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-[#333]"
-                  }`}
+                    }`}
                 >
                   <span className="truncate">
                     {opt.label}
@@ -125,4 +124,4 @@ export function StatusBar({ onToggleSidebar, sidebarCollapsed }: StatusBarProps)
       </div>
     </div>
   );
-}
+});

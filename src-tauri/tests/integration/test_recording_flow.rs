@@ -11,6 +11,7 @@
 // so the end-to-end test is marked #[ignore] for manual validation.
 // Component-level integration is tested with available resources.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, RwLock};
 
@@ -27,6 +28,8 @@ fn make_test_state() -> AppState {
         recording_active: RwLock::new(false),
         engine: RwLock::new(None),
         active_capture: Mutex::new(None),
+        recording_started_at: Mutex::new(None),
+        download_cancel_tokens: Mutex::new(HashMap::new()),
     }
 }
 

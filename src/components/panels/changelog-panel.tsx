@@ -11,6 +11,19 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "3.0.0",
+    date: "2026-03-05",
+    added: [
+      "Brand new 3.0.0 UI overhaul with smooth Framer Motion animations",
+      "Stats widget improvements with animated number counters and card hover effects",
+      "Enhanced processing animations and overlay transitions",
+    ],
+    changed: [
+      "Polished sidebar navigation and active states",
+      "Streamlined panel transitions with blur fades",
+    ],
+  },
+  {
     version: "0.2.1",
     date: "2026-02-25",
     added: [

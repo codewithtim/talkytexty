@@ -50,6 +50,21 @@
         "skipTaskbar": true,
         "resizable": false,
         "center": true
+      },
+      {
+        "label": "review-window",
+        "title": "",
+        "url": "/review",
+        "width": 600,
+        "height": 200,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "focusable": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "center": true
       }
     ],
     "security": {

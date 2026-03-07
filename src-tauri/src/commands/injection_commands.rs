@@ -32,19 +32,29 @@ pub async fn inject_text(
 
     // Drop the read lock before sleeping
     let injection_method = prefs.text_injection_method.clone();
+    let clipboard_fallback = prefs.clipboard_fallback;
     drop(prefs);
 
     // Small delay to let any window activation settle
     std::thread::sleep(std::time::Duration::from_millis(50));
 
-    match injection_method {
+    let result = match injection_method {
         TextInjectionMethod::SimulatedKeystrokes => {
             inject_text_via_keyboard(&text)
-                .map_err(|e| CommandError::new("InjectionFailed", e))?;
         }
         TextInjectionMethod::ClipboardPaste => {
             inject_text_via_clipboard(&text)
-                .map_err(|e| CommandError::new("InjectionFailed", e))?;
+        }
+    };
+
+    // If injection failed and clipboard fallback is enabled, try that
+    if let Err(e) = result {
+        if clipboard_fallback {
+            eprintln!("[inject_text] Primary injection failed ({}), trying clipboard fallback", e);
+            inject_text_via_clipboard(&text)
+                .map_err(|e| CommandError::new("InjectionFailed", format!("Primary and clipboard fallback both failed: {}", e)))?;
+        } else {
+            return Err(CommandError::new("InjectionFailed", e));
         }
     }
 
