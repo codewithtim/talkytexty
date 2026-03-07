@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { OverlayPage } from "./pages/overlay";
 import { PickerPage } from "./pages/picker";
+import { ReviewPage } from "./pages/review";
 import { useRecording } from "./hooks/use-recording";
 import { PreferencesProvider } from "./hooks/use-preferences";
 import { Sidebar } from "./components/sidebar";
@@ -14,6 +16,7 @@ import { ModelsPanel } from "./components/panels/models-panel";
 import { AboutPanel } from "./components/panels/about-panel";
 import { ChangelogPanel } from "./components/panels/changelog-panel";
 import { HistoryPanel } from "./components/panels/history-panel";
+import { MacrosPanel } from "./components/panels/macros-panel";
 import type { SettingsSection } from "./types";
 
 const ROUTE_TO_SECTION: Record<string, SettingsSection> = {
@@ -26,6 +29,7 @@ const PANELS: Record<SettingsSection, React.ReactNode> = {
   general: <GeneralPanel />,
   history: <HistoryPanel />,
   models: <ModelsPanel />,
+  macros: <MacrosPanel />,
   changelog: <ChangelogPanel />,
   about: <AboutPanel />,
 };
@@ -53,6 +57,10 @@ function RecordingListener() {
 function MainWindow() {
   const [activeSection, setActiveSection] = useState<SettingsSection>("general");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarCollapsed(c => !c);
+  }, []);
 
   // Hide macOS minimize/maximize traffic-light buttons when sidebar is collapsed
   useEffect(() => {
@@ -85,10 +93,20 @@ function MainWindow() {
         <RecordingListener />
         <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} collapsed={sidebarCollapsed} />
         <div className="flex-1 flex flex-col min-h-0">
-          <StatusBar onToggleSidebar={() => setSidebarCollapsed(c => !c)} sidebarCollapsed={sidebarCollapsed} />
+          <StatusBar onToggleSidebar={handleToggleSidebar} sidebarCollapsed={sidebarCollapsed} />
           <PermissionBanner />
           <main className="flex-1 overflow-y-auto p-8">
-            {PANELS[activeSection]}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeSection}
+                initial={{ opacity: 0, y: 15, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -15, filter: "blur(4px)" }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              >
+                {PANELS[activeSection]}
+              </motion.div>
+            </AnimatePresence>
           </main>
         </div>
       </div>
@@ -106,6 +124,7 @@ function App() {
       <Routes>
         <Route path="/overlay" element={<OverlayPage />} />
         <Route path="/picker" element={<PickerPage />} />
+        <Route path="/review" element={<ReviewPage />} />
         <Route path="/*" element={<MainWindow />} />
       </Routes>
     </BrowserRouter>

@@ -137,6 +137,26 @@ impl AudioCapture {
         };
         (buffer, self.sample_rate)
     }
+
+    /// Get the current buffer content without stopping capture.
+    /// Returns a clone of the buffer and the number of samples.
+    /// Useful for streaming transcription during recording.
+    pub fn get_buffer_snapshot(&self) -> Vec<f32> {
+        self.buffer.lock().map(|b| b.clone()).unwrap_or_default()
+    }
+
+    /// Clear the buffer after processing a chunk for streaming.
+    /// Keeps the capture running but removes processed samples.
+    pub fn clear_buffer(&self) {
+        if let Ok(mut buf) = self.buffer.lock() {
+            buf.clear();
+        }
+    }
+
+    /// Get the current sample rate.
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
 }
 
 /// Estimate buffer capacity for a given sample rate and max duration in seconds.

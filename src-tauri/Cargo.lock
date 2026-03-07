@@ -5767,6 +5767,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tempfile",
  "tokio",
+ "tokio-util",
  "uuid",
  "whisper-rs",
  "x-win",

@@ -1,4 +1,6 @@
-use tauri::State;
+use tauri::{Emitter, State};
+
+use tokio_util::sync::CancellationToken;
 
 use crate::transcription::engine::{ParakeetEngine, TranscriptionEngine, WhisperEngine};
 use crate::transcription::models;
@@ -119,9 +121,13 @@ pub async fn set_active_model(
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn download_model(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     model_id: String,
 ) -> Result<TranscriptionModel, CommandError> {
+    use futures_util::StreamExt;
+    use crate::transcription::DownloadProgress;
+
     let all_models = models::get_builtin_models(&state.app_data_dir);
     let model = all_models
         .iter()
@@ -142,7 +148,7 @@ pub async fn download_model(
         ));
     }
 
-    // Persist downloading status BEFORE starting so it survives navigation
+    // Persist downloading status BEFORE starting
     models::update_model_status(
         &state.app_data_dir,
         &model_id,
@@ -150,76 +156,159 @@ pub async fn download_model(
     )
     .map_err(|e| CommandError::new("DownloadFailed", e))?;
 
-    // Extract values needed for the blocking download task
     let hf_repo = model.huggingface_repo.clone();
     let filenames = model.huggingface_filenames.clone();
     let app_data_dir = state.app_data_dir.clone();
-    let dl_model_id = model.id.clone();
+    let total_size = model.size_bytes;
+    let mut bytes_downloaded = 0;
 
-    // Run blocking hf-hub download on a dedicated thread to avoid blocking
-    // the Tokio async runtime (critical for Parakeet's multi-GB downloads)
-    let error_reset_dir = state.app_data_dir.clone();
-    let error_reset_id = model_id.clone();
+    let client = reqwest::Client::new();
 
-    let dest_str = match tokio::task::spawn_blocking(move || -> Result<String, CommandError> {
-        let api = hf_hub::api::sync::Api::new()
-            .map_err(|e| CommandError::new("DownloadFailed", format!("Failed to initialize HF API: {}", e)))?;
-        let repo = api.model(hf_repo);
+    let cancel_token = CancellationToken::new();
+    {
+        let mut tokens = state
+            .download_cancel_tokens
+            .lock()
+            .map_err(|e| CommandError::new("LockError", e.to_string()))?;
+        tokens.insert(model_id.clone(), cancel_token.clone());
+    }
 
-        if filenames.len() == 1 {
-            // Single file (Whisper)
-            eprintln!("[download_model] Downloading single file: {}", filenames[0]);
-            let path = repo
-                .get(&filenames[0])
-                .map_err(|e| CommandError::new("DownloadFailed", format!("Download failed: {}", e)))?;
+    let start_instant = std::time::Instant::now();
+    let mut last_emit = start_instant;
+    let mut last_bytes = 0_u64;
+    let dest_str = if filenames.len() == 1 {
+        // Single file (Whisper)
+        let filename = &filenames[0];
+        let url = format!("https://huggingface.co/{}/resolve/main/{}", hf_repo, filename);
+        let dest = models::model_file_path(&app_data_dir, filename);
 
-            let dest = models::model_file_path(&app_data_dir, &filenames[0]);
-            if let Some(parent) = dest.parent() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| CommandError::new("DownloadFailed", format!("Failed to create directory: {}", e)))?;
-            }
-            std::fs::copy(&path, &dest)
-                .map_err(|e| CommandError::new("DownloadFailed", format!("Failed to copy model: {}", e)))?;
-
-            Ok(dest.to_string_lossy().to_string())
-        } else {
-            // Multi-file (Parakeet): create directory and download each file
-            let dest_dir = models::model_dir_path(&app_data_dir, &dl_model_id);
-            std::fs::create_dir_all(&dest_dir)
-                .map_err(|e| CommandError::new("DownloadFailed", format!("Failed to create model directory: {}", e)))?;
-
-            for (i, filename) in filenames.iter().enumerate() {
-                eprintln!("[download_model] Downloading file {}/{}: {}", i + 1, filenames.len(), filename);
-                let path = repo
-                    .get(filename)
-                    .map_err(|e| CommandError::new("DownloadFailed", format!("Download of {} failed: {}", filename, e)))?;
-
-                // Flatten: strip any subdirectory prefix (e.g. "onnx/model.onnx" → "model.onnx")
-                // so all files land directly in the model directory for parakeet-rs
-                let local_name = std::path::Path::new(filename)
-                    .file_name()
-                    .unwrap_or_else(|| std::ffi::OsStr::new(filename));
-                let dest_file = dest_dir.join(local_name);
-                std::fs::copy(&path, &dest_file)
-                    .map_err(|e| CommandError::new("DownloadFailed", format!("Failed to copy {}: {}", filename, e)))?;
-                eprintln!("[download_model] Completed file: {}", filename);
-            }
-
-            Ok(dest_dir.to_string_lossy().to_string())
+        if let Some(parent) = dest.parent() {
+            tokio::fs::create_dir_all(parent).await
+                .map_err(|e| CommandError::new("DownloadFailed", format!("Failed to create directory: {}", e)))?;
         }
-    })
-    .await
-    .map_err(|e| CommandError::new("DownloadFailed", format!("Download task failed: {}", e)))? {
-        Ok(path) => path,
-        Err(e) => {
-            // Reset status so the user can retry
-            let _ = models::update_model_status(
-                &error_reset_dir,
-                &error_reset_id,
-                DownloadStatus::NotDownloaded,
-            );
-            return Err(e);
+
+        let res = client.get(&url).send().await
+            .map_err(|e| CommandError::new("DownloadFailed", format!("Failed to connect: {}", e)))?;
+
+        if !res.status().is_success() {
+            return Err(CommandError::new("DownloadFailed", format!("Server returned status: {}", res.status())));
         }
+
+        let mut file = tokio::fs::File::create(&dest).await
+            .map_err(|e| CommandError::new("DownloadFailed", format!("Failed to create file: {}", e)))?;
+
+        let mut stream = res.bytes_stream();
+        while let Some(item) = stream.next().await {
+            if cancel_token.is_cancelled() {
+                models::update_model_status(
+                    &state.app_data_dir,
+                    &model_id,
+                    DownloadStatus::NotDownloaded,
+                )
+                .ok();
+                return Err(CommandError::new("DownloadCancelled", "Download cancelled."));
+            }
+            let chunk = item.map_err(|e| CommandError::new("DownloadFailed", format!("Download error: {}", e)))?;
+            tokio::io::copy(&mut &chunk[..], &mut file).await
+                .map_err(|e| CommandError::new("DownloadFailed", format!("Write error: {}", e)))?;
+
+            bytes_downloaded += chunk.len() as u64;
+            let percent = (bytes_downloaded as f32 / total_size as f32) * 100.0;
+
+            let now = std::time::Instant::now();
+            if now.duration_since(last_emit).as_millis() > 250 {
+                let dt = now.duration_since(last_emit).as_secs_f64().max(0.001);
+                let dbytes = bytes_downloaded.saturating_sub(last_bytes);
+                let bps = (dbytes as f64 / dt) as u64;
+                let remaining = total_size.saturating_sub(bytes_downloaded);
+                let eta = if bps > 0 { Some((remaining / bps) as u64) } else { None };
+
+                let _ = app.emit(
+                    "download-progress",
+                    DownloadProgress {
+                        model_id: model_id.clone(),
+                        percent,
+                        bytes_downloaded,
+                        bytes_total: total_size,
+                        bytes_per_second: bps,
+                        eta_seconds: eta,
+                    },
+                );
+                last_emit = now;
+                last_bytes = bytes_downloaded;
+            }
+        }
+
+        dest.to_string_lossy().to_string()
+    } else {
+        // Multi-file (Parakeet)
+        let dest_dir = models::model_dir_path(&app_data_dir, &model_id);
+        tokio::fs::create_dir_all(&dest_dir).await
+            .map_err(|e| CommandError::new("DownloadFailed", format!("Failed to create model directory: {}", e)))?;
+
+        for filename in &filenames {
+            let url = format!("https://huggingface.co/{}/resolve/main/{}", hf_repo, filename);
+
+            // Strip any subdirectory prefix for local storage
+            let local_name = std::path::Path::new(filename)
+                .file_name()
+                .unwrap_or_else(|| std::ffi::OsStr::new(filename));
+            let dest_file = dest_dir.join(local_name);
+
+            let res = client.get(&url).send().await
+                .map_err(|e| CommandError::new("DownloadFailed", format!("Failed to connect: {}", e)))?;
+
+            if !res.status().is_success() {
+                return Err(CommandError::new("DownloadFailed", format!("Server returned status: {}", res.status())));
+            }
+
+            let mut file = tokio::fs::File::create(&dest_file).await
+                .map_err(|e| CommandError::new("DownloadFailed", format!("Failed to create file: {}", e)))?;
+
+            let mut stream = res.bytes_stream();
+            while let Some(item) = stream.next().await {
+                if cancel_token.is_cancelled() {
+                    models::update_model_status(
+                        &state.app_data_dir,
+                        &model_id,
+                        DownloadStatus::NotDownloaded,
+                    )
+                    .ok();
+                    return Err(CommandError::new("DownloadCancelled", "Download cancelled."));
+                }
+                let chunk = item.map_err(|e| CommandError::new("DownloadFailed", format!("Download error: {}", e)))?;
+                tokio::io::copy(&mut &chunk[..], &mut file).await
+                    .map_err(|e| CommandError::new("DownloadFailed", format!("Write error: {}", e)))?;
+
+                bytes_downloaded += chunk.len() as u64;
+                let percent = (bytes_downloaded as f32 / total_size as f32) * 100.0;
+
+                let now = std::time::Instant::now();
+                if now.duration_since(last_emit).as_millis() > 250 {
+                    let dt = now.duration_since(last_emit).as_secs_f64().max(0.001);
+                    let dbytes = bytes_downloaded.saturating_sub(last_bytes);
+                    let bps = (dbytes as f64 / dt) as u64;
+                    let remaining = total_size.saturating_sub(bytes_downloaded);
+                    let eta = if bps > 0 { Some((remaining / bps) as u64) } else { None };
+
+                    let _ = app.emit(
+                        "download-progress",
+                        DownloadProgress {
+                            model_id: model_id.clone(),
+                            percent,
+                            bytes_downloaded,
+                            bytes_total: total_size,
+                            bytes_per_second: bps,
+                            eta_seconds: eta,
+                        },
+                    );
+                    last_emit = now;
+                    last_bytes = bytes_downloaded;
+                }
+            }
+        }
+
+        dest_dir.to_string_lossy().to_string()
     };
 
     // Update registry
@@ -236,6 +325,21 @@ pub async fn download_model(
         .into_iter()
         .find(|m| m.id == model_id)
         .ok_or_else(|| CommandError::new("ModelNotFound", "Model disappeared after download"))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn cancel_model_download(
+    state: State<'_, AppState>,
+    model_id: String,
+) -> Result<(), CommandError> {
+    let tokens = state
+        .download_cancel_tokens
+        .lock()
+        .map_err(|e| CommandError::new("LockError", e.to_string()))?;
+    if let Some(token) = tokens.get(&model_id) {
+        token.cancel();
+    }
+    Ok(())
 }
 
 #[tauri::command(rename_all = "camelCase")]

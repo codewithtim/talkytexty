@@ -1,6 +1,7 @@
 import { useModels } from "@/hooks/use-models";
 import { usePreferences } from "@/hooks/use-preferences";
 import { ModelCard } from "@/components/model-card";
+import { motion } from "framer-motion";
 
 export function ModelsPanel() {
   const {
@@ -10,6 +11,7 @@ export function ModelsPanel() {
     downloadingModelId,
     activatingModelId,
     downloadModel,
+    cancelDownload,
     deleteModel,
     setActiveModel,
   } = useModels();
@@ -38,17 +40,24 @@ export function ModelsPanel() {
       )}
 
       <div className="space-y-3">
-        {models.map((model) => (
-          <ModelCard
+        {models.map((model, index) => (
+          <motion.div
             key={model.id}
-            model={model}
-            isActive={preferences?.activeModelId === model.id}
-            isStartingDownload={downloadingModelId === model.id}
-            isActivating={activatingModelId === model.id}
-            onDownload={downloadModel}
-            onDelete={deleteModel}
-            onActivate={handleActivate}
-          />
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: index * 0.05, ease: "easeOut" }}
+          >
+            <ModelCard
+              model={model}
+              isActive={preferences?.activeModelId === model.id}
+              isStartingDownload={downloadingModelId === model.id}
+              isActivating={activatingModelId === model.id}
+              onDownload={downloadModel}
+              onCancelDownload={cancelDownload}
+              onDelete={deleteModel}
+              onActivate={handleActivate}
+            />
+          </motion.div>
         ))}
       </div>
 

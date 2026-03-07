@@ -8,6 +8,7 @@
 // These test the validation logic by setting up AppState and checking
 // the behaviors documented in the contracts.
 
+use std::collections::HashMap;
 use std::fs;
 use std::sync::{Mutex, RwLock};
 
@@ -25,6 +26,7 @@ fn make_test_state_with_dir(dir: &std::path::Path) -> AppState {
         engine: RwLock::new(None),
         active_capture: Mutex::new(None),
         recording_started_at: Mutex::new(None),
+        download_cancel_tokens: Mutex::new(HashMap::new()),
     }
 }
 

@@ -8,6 +8,7 @@ pub mod transcription;
 
 use std::path::PathBuf;
 use std::sync::{Mutex, RwLock};
+use std::collections::HashMap;
 
 use audio::capture::AudioCapture;
 use hotkeys::{resolve_hotkey_event, HotkeyEvent, HotkeyResponse};
@@ -17,7 +18,7 @@ use tauri::{
     image::Image,
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager, RunEvent, WindowEvent, Wry,
+    Emitter, Manager, WindowEvent, Wry,
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use transcription::engine::TranscriptionEngine;
@@ -29,6 +30,7 @@ pub struct AppState {
     pub engine: RwLock<Option<Box<dyn TranscriptionEngine>>>,
     pub active_capture: Mutex<Option<AudioCapture>>,
     pub recording_started_at: Mutex<Option<std::time::Instant>>,
+    pub download_cancel_tokens: Mutex<HashMap<String, tokio_util::sync::CancellationToken>>,
 }
 
 fn build_tray_menu(
@@ -242,6 +244,14 @@ pub fn run() {
             let prefs = storage::load_preferences(&app_data_dir)
                 .unwrap_or_default();
 
+            // Crash-safe recovery: clear any stale recording marker from a previous crash
+            {
+                let marker = app_data_dir.join("recording.lock");
+                if marker.exists() {
+                    let _ = std::fs::remove_file(marker);
+                }
+            }
+
             // Register enabled hotkeys
             let global_shortcut = app.global_shortcut();
             for hotkey in &prefs.hotkeys {
@@ -296,6 +306,7 @@ pub fn run() {
                 app_data_dir,
                 recording_active: RwLock::new(false),
                 engine: RwLock::new(initial_engine),
+                download_cancel_tokens: Mutex::new(HashMap::new()),
                 active_capture: Mutex::new(None),
                 recording_started_at: Mutex::new(None),
             });
@@ -426,8 +437,51 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" {
-                    api.prevent_close();
-                    let _ = window.hide();
+                    let app_handle = window.app_handle();
+                    let state = app_handle.state::<AppState>();
+                    
+                    // Read close behavior from preferences
+                    let close_behavior = state
+                        .preferences
+                        .read()
+                        .map(|p| p.close_behavior.clone())
+                        .unwrap_or_else(|_| preferences::CloseBehavior::HideToTray);
+                    
+                    match close_behavior {
+                        preferences::CloseBehavior::Quit => {
+                            // Allow the window to close, which will trigger app exit
+                            // since we removed the exit prevention logic
+                        }
+                        preferences::CloseBehavior::HideToTray => {
+                            api.prevent_close();
+                            let _ = window.hide();
+                            
+                            // Check if we should show the first-time tooltip
+                            let show_tooltip = state
+                                .preferences
+                                .read()
+                                .map(|p| p.show_tray_tooltip)
+                                .unwrap_or(true);
+                            
+                            if show_tooltip {
+                                // Show tray notification about running in background
+                                if let Some(tray) = app_handle.tray_by_id("main-tray") {
+                                    let _ = tray.set_tooltip(Some("TalkyTexty is still running. Use tray menu to quit."));
+                                    // Reset after a few seconds
+                                    let app_clone = app_handle.clone();
+                                    std::thread::spawn(move || {
+                                        std::thread::sleep(std::time::Duration::from_secs(5));
+                                        let _ = app_clone.tray_by_id("main-tray").map(|t| t.set_tooltip(Some("TalkyTexty")));
+                                    });
+                                }
+                                
+                                // Mark tooltip as shown so it doesn't appear again
+                                let mut prefs = state.preferences.write().unwrap();
+                                prefs.show_tray_tooltip = false;
+                                let _ = preferences::storage::save_preferences(&state.app_data_dir, &prefs);
+                            }
+                        }
+                    }
                 }
             }
         })
@@ -436,6 +490,7 @@ pub fn run() {
             commands::system_commands::request_permission,
             commands::preferences_commands::get_preferences,
             commands::preferences_commands::update_preferences,
+            commands::model_commands::cancel_model_download,
             commands::model_commands::list_models,
             commands::model_commands::set_active_model,
             commands::model_commands::download_model,
@@ -444,6 +499,7 @@ pub fn run() {
             commands::audio_commands::stop_recording,
             commands::audio_commands::cancel_recording,
             commands::audio_commands::list_audio_devices,
+            commands::audio_commands::test_microphone,
             commands::injection_commands::inject_text,
             commands::injection_commands::list_windows,
             commands::injection_commands::copy_to_clipboard,
@@ -456,15 +512,7 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            if let RunEvent::ExitRequested { api, .. } = &event {
-                // Prevent exit when all windows are closed
-                let has_visible_window = app
-                    .webview_windows()
-                    .values()
-                    .any(|w| w.is_visible().unwrap_or(false));
-                if !has_visible_window {
-                    api.prevent_exit();
-                }
-            }
+            let _ = app;
+            let _ = event;
         });
 }

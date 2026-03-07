@@ -7,6 +7,7 @@ interface ModelCardProps {
   isStartingDownload?: boolean;
   isActivating?: boolean;
   onDownload: (modelId: string) => void;
+  onCancelDownload: (modelId: string) => void;
   onDelete: (modelId: string) => void;
   onActivate: (modelId: string) => void;
 }
@@ -52,6 +53,7 @@ export function ModelCard({
   isStartingDownload,
   isActivating,
   onDownload,
+  onCancelDownload,
   onDelete,
   onActivate,
 }: ModelCardProps) {
@@ -60,19 +62,17 @@ export function ModelCard({
 
   return (
     <div
-      className={`rounded-lg p-4 ${
-        isActive
-          ? "bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-500/50"
-          : "bg-[#f5f5f7] dark:bg-[#2a2a2a] border border-[#e5e5e7] dark:border-[#3a3a3a]"
-      }`}
+      className={`rounded-xl p-4 transition-all duration-300 transform hover:-translate-y-0.5 ${isActive
+        ? "bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-500/50 shadow-sm"
+        : "bg-[#f5f5f7] dark:bg-[#2a2a2a] border border-[#e5e5e7] dark:border-[#3a3a3a] hover:border-gray-400 dark:hover:border-gray-600 hover:shadow-md"
+        }`}
     >
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
             <CompanyBadge modelFamily={model.modelFamily} />
-            <span className={`text-xs uppercase tracking-wide ${
-              model.modelFamily === "Parakeet" ? "text-green-600 dark:text-green-500" : "text-gray-500 dark:text-gray-500"
-            }`}>
+            <span className={`text-xs uppercase tracking-wide ${model.modelFamily === "Parakeet" ? "text-green-600 dark:text-green-500" : "text-gray-500 dark:text-gray-500"
+              }`}>
               {model.modelFamily}
             </span>
           </div>
@@ -98,7 +98,8 @@ export function ModelCard({
             <button
               onClick={() => onActivate(model.id)}
               disabled={isActivating}
-              className="text-sm px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="text-sm px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              aria-label={`Activate ${model.name}`}
             >
               {isActivating ? (
                 <span className="flex items-center gap-1.5">
@@ -113,7 +114,8 @@ export function ModelCard({
           {isDownloaded && !isActive && (
             <button
               onClick={() => onDelete(model.id)}
-              className="text-sm px-3 py-1.5 rounded bg-gray-200 dark:bg-gray-700 hover:bg-red-600 text-gray-600 dark:text-gray-300 hover:text-white transition-colors"
+              className="text-sm px-3 py-1.5 rounded bg-gray-200 dark:bg-gray-700 hover:bg-red-600 text-gray-600 dark:text-gray-300 hover:text-white transition-colors cursor-pointer"
+              aria-label={`Delete ${model.name}`}
             >
               Delete
             </button>
@@ -122,7 +124,8 @@ export function ModelCard({
             <button
               onClick={() => onDownload(model.id)}
               disabled={isStartingDownload}
-              className="text-sm px-3 py-1.5 rounded bg-green-600 hover:bg-green-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="text-sm px-3 py-1.5 rounded bg-green-600 hover:bg-green-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              aria-label={`Download ${model.name}`}
             >
               {isStartingDownload ? (
                 <span className="flex items-center gap-1.5">
@@ -134,17 +137,57 @@ export function ModelCard({
               )}
             </button>
           )}
+
+          {isDownloading && (
+            <button
+              onClick={() => onCancelDownload(model.id)}
+              className="text-sm px-3 py-1.5 rounded bg-gray-200 dark:bg-gray-700 hover:bg-red-600 text-gray-600 dark:text-gray-300 hover:text-white transition-colors cursor-pointer"
+              aria-label={`Cancel download for ${model.name}`}
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </div>
 
       {isDownloading && (
-        <div className="mt-3 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-          <Spinner />
-          <span>Downloading...</span>
-          {model.downloadStatus.status === "Downloading" &&
-            model.downloadStatus.progressPercent > 0 && (
-              <span>{model.downloadStatus.progressPercent}%</span>
+        <div className="mt-4">
+          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1.5">
+            <span className="flex items-center gap-1.5">
+              <Spinner />
+              Downloading...
+            </span>
+            {model.downloadStatus.status === "Downloading" && (
+              <span>{Math.round(model.downloadStatus.progressPercent)}%</span>
             )}
+          </div>
+
+          {(model.downloadMeta?.bytesPerSecond ?? 0) > 0 && (
+            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+              <span>
+                {(model.downloadMeta?.bytesPerSecond ?? 0) > 0
+                  ? `${formatBytes(model.downloadMeta?.bytesPerSecond ?? 0)}/s`
+                  : ""}
+              </span>
+              <span>
+                {model.downloadMeta?.etaSeconds != null
+                  ? `ETA ${Math.max(0, Math.round(model.downloadMeta.etaSeconds))}s`
+                  : ""}
+              </span>
+            </div>
+          )}
+
+          <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-green-500 transition-all duration-300 ease-out"
+              style={{
+                width: `${model.downloadStatus.status === "Downloading"
+                  ? model.downloadStatus.progressPercent
+                  : 0
+                  }%`,
+              }}
+            />
+          </div>
         </div>
       )}
 

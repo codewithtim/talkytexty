@@ -1,8 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { emit } from "@tauri-apps/api/event";
-import type { TranscriptionResult, AudioEvent, UserPreferences, PermissionStatus } from "@/types";
+import type { TranscriptionResult, AudioEvent, PermissionStatus } from "@/types";
 
 type RecordingState = "idle" | "recording" | "transcribing" | "injecting";
 
@@ -75,18 +74,6 @@ export function useRecording(
         onEvent: channel,
       });
       setLastResult(result);
-
-      if (result.text) {
-        // Fetch current preferences from Rust to get the latest target mode
-        const prefs = await invoke<UserPreferences>("get_preferences");
-
-        if (prefs.targetMode.type === "WindowPicker") {
-          await emit("show-picker", { text: result.text });
-        } else {
-          setState("injecting");
-          await invoke("inject_text", { text: result.text });
-        }
-      }
 
       setState("idle");
       return result;

@@ -40,6 +40,7 @@ pub enum AudioEvent {
     AmplitudeUpdate { amplitudes: Vec<f32>, rms: f32 },
     TranscriptionStarted,
     TranscriptionCompleted { text: String },
+    StreamingTranscription { text: String, is_final: bool },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -10,14 +11,18 @@ import type { VisualizationStyle, ProcessingAnimation, OverlayMode, UserPreferen
 export function OverlayPage() {
   const [visible, setVisible] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [errorState, setErrorState] = useState<string | null>(null);
+  const [warningState, setWarningState] = useState<string | null>(null);
   const [visualization, setVisualization] = useState<VisualizationStyle>("Bars");
   const [processingAnimation, setProcessingAnimation] = useState<ProcessingAnimation>("Pulse");
   const [overlayMode, setOverlayMode] = useState<OverlayMode>("Full");
   const [hotkeyDisplay, setHotkeyDisplay] = useState<string>("");
   const [micName, setMicName] = useState<string>("Default");
   const [isDragging, setIsDragging] = useState(false);
-  const { amplitudes } = useAudioStream();
+  const { amplitudes, rms } = useAudioStream();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lowAudioSinceRef = useRef<number | null>(null);
 
   // Extract display hotkey and mic name from preferences
   const extractPrefsDisplay = (prefs: UserPreferences) => {
@@ -39,11 +44,69 @@ export function OverlayPage() {
         setOverlayMode(prefs.overlayMode ?? "Full");
         extractPrefsDisplay(prefs);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
+
+  useEffect(() => {
+    if (!visible || processing) {
+      setWarningState(null);
+      lowAudioSinceRef.current = null;
+      return;
+    }
+
+    const threshold = 0.008;
+    const now = Date.now();
+
+    if (rms > 0 && rms < threshold) {
+      if (lowAudioSinceRef.current == null) {
+        lowAudioSinceRef.current = now;
+      }
+      const elapsed = now - lowAudioSinceRef.current;
+      if (elapsed > 1500) {
+        setWarningState("Low mic level");
+      }
+    } else {
+      lowAudioSinceRef.current = null;
+      setWarningState(null);
+    }
+  }, [rms, visible, processing]);
 
   // Recording lifecycle events
   useEffect(() => {
+    const unlistenState = listen<{ state: string; message?: string }>("overlay-state", (event) => {
+      const state = event.payload.state;
+      const message = event.payload.message ?? null;
+      if (state === "idle") {
+        setVisible(false);
+        setProcessing(false);
+        setSuccess(false);
+        setErrorState(null);
+        setWarningState(null);
+        lowAudioSinceRef.current = null;
+      } else if (state === "recording") {
+        setVisible(true);
+        setProcessing(false);
+        setSuccess(false);
+        setErrorState(null);
+        setWarningState(null);
+        lowAudioSinceRef.current = null;
+      } else if (state === "transcribing" || state === "injecting") {
+        setVisible(true);
+        setProcessing(true);
+        setSuccess(false);
+        setErrorState(null);
+        setWarningState(null);
+        lowAudioSinceRef.current = null;
+      } else if (state === "error") {
+        setVisible(true);
+        setProcessing(false);
+        setSuccess(false);
+        setErrorState(message || "Error");
+        setWarningState(null);
+        lowAudioSinceRef.current = null;
+      }
+    });
+
     const unlisten1 = listen("recording-started", () => {
       // Re-fetch preferences each time recording starts in case they changed
       invoke<UserPreferences>("get_preferences")
@@ -53,7 +116,7 @@ export function OverlayPage() {
           setOverlayMode(prefs.overlayMode ?? "Full");
           extractPrefsDisplay(prefs);
         })
-        .catch(() => {});
+        .catch(() => { });
       setVisible(true);
       setProcessing(false);
     });
@@ -61,15 +124,21 @@ export function OverlayPage() {
       setProcessing(true);
     });
     const unlisten3 = listen("transcription-completed", () => {
-      setVisible(false);
       setProcessing(false);
+      setSuccess(true);
+      setTimeout(() => {
+        setSuccess(false);
+        setVisible(false);
+      }, 2000);
     });
     const unlisten4 = listen("recording-cancelled", () => {
       setVisible(false);
       setProcessing(false);
+      setSuccess(false);
     });
 
     return () => {
+      void unlistenState.then((f) => f());
       void unlisten1.then((f) => f());
       void unlisten2.then((f) => f());
       void unlisten3.then((f) => f());
@@ -109,27 +178,34 @@ export function OverlayPage() {
     }
   };
 
-  if (!visible) {
-    return <div className="h-screen bg-transparent" />;
-  }
-
   return (
     <div className="flex items-center justify-center h-screen bg-transparent">
-      <div
-        onMouseDown={handleMouseDown}
-        className={isDragging ? "cursor-grabbing" : "cursor-grab"}
-      >
-        <RecordingPill
-          amplitudes={amplitudes}
-          isRecording={!processing}
-          isProcessing={processing}
-          visualization={visualization}
-          processingAnimation={processingAnimation}
-          overlayMode={overlayMode}
-          hotkey={hotkeyDisplay || undefined}
-          micName={micName}
-        />
-      </div>
+      <AnimatePresence>
+        {visible && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            onMouseDown={handleMouseDown}
+            className={isDragging ? "cursor-grabbing" : "cursor-grab"}
+          >
+            <RecordingPill
+              amplitudes={amplitudes}
+              isRecording={!processing}
+              isProcessing={processing}
+              visualization={visualization}
+              processingAnimation={processingAnimation}
+              overlayMode={overlayMode}
+              hotkey={hotkeyDisplay || undefined}
+              micName={micName}
+              isSuccess={success}
+              errorMessage={errorState || undefined}
+              warningMessage={warningState || undefined}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

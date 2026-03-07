@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use parakeet_rs::Transcriber;
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
+use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState};
 
 /// Domain trait for speech-to-text engines.
 /// All engines accept 16kHz mono f32 audio and return transcribed text.
@@ -10,9 +10,13 @@ pub trait TranscriptionEngine: Send + Sync {
     fn transcribe(&self, audio: &[f32]) -> Result<String, String>;
 }
 
-/// Thread-safe wrapper around WhisperContext.
+/// Thread-safe wrapper around WhisperContext with cached state for performance.
+/// Caching the WhisperState avoids memory allocation overhead on each transcription.
 pub struct WhisperEngine {
     ctx: Arc<WhisperContext>,
+    /// Cached state to avoid recreation overhead on each transcription.
+    /// This provides significant speedup by reusing allocated memory.
+    state: Mutex<Option<WhisperState>>,
 }
 
 // WhisperContext is Send+Sync, but we wrap for convenience
@@ -26,11 +30,29 @@ impl WhisperEngine {
             .to_str()
             .ok_or_else(|| "Invalid model path encoding".to_string())?;
 
-        let ctx = WhisperContext::new_with_params(path_str, WhisperContextParameters::default())
+        // Configure context parameters for GPU acceleration
+        let mut ctx_params = WhisperContextParameters::default();
+        
+        // Enable GPU offloading - offload all layers for maximum speedup
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        {
+            // CUDA: offload all 32 layers to GPU for maximum performance
+            ctx_params.use_gpu = true;
+            ctx_params.gpu_device = 0; // Use first GPU
+        }
+        
+        #[cfg(target_os = "macos")]
+        {
+            // Metal/CoreML: enabled via features flag
+            ctx_params.use_gpu = true;
+        }
+
+        let ctx = WhisperContext::new_with_params(path_str, ctx_params)
             .map_err(|e| format!("Failed to load whisper model: {}", e))?;
 
         Ok(Self {
             ctx: Arc::new(ctx),
+            state: Mutex::new(None),
         })
     }
 
@@ -49,11 +71,30 @@ impl WhisperEngine {
         params.set_suppress_blank(true);
         params.set_single_segment(false);
         params.set_no_context(true);
+        
+        // Fix for spaced-letter bug ("t h i s" instead of "this")
+        // Use entropy threshold to skip low-confidence character-level tokens
+        params.set_temperature(0.0);            // Greedy decoding (no randomness)
+        params.set_entropy_thold(2.4);          // Skip low-confidence repetition
+        
+        // Use multiple threads for faster CPU inference
+        params.set_n_threads(4);
 
-        let mut state = self
-            .ctx
-            .create_state()
-            .map_err(|e| format!("Failed to create whisper state: {}", e))?;
+        // Get or create cached state
+        let mut state_lock = self.state.lock().map_err(|e| format!("Failed to acquire state lock: {}", e))?;
+        
+        let state = if let Some(ref mut existing_state) = *state_lock {
+            // Reuse cached state - major performance win
+            existing_state
+        } else {
+            // First transcription - create and cache state
+            let new_state = self
+                .ctx
+                .create_state()
+                .map_err(|e| format!("Failed to create whisper state: {}", e))?;
+            *state_lock = Some(new_state);
+            state_lock.as_mut().unwrap()
+        };
 
         state
             .full(params, audio)

@@ -8,6 +8,7 @@
 // Note: Actual text injection requires Accessibility permission
 // and is tested with #[ignore] in test_keyboard.rs.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, RwLock};
 
@@ -24,6 +25,7 @@ fn make_test_state() -> AppState {
         engine: RwLock::new(None),
         active_capture: Mutex::new(None),
         recording_started_at: Mutex::new(None),
+        download_cancel_tokens: Mutex::new(HashMap::new()),
     }
 }
 

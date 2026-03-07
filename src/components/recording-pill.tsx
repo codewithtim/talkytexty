@@ -14,6 +14,9 @@ interface RecordingPillProps {
   overlayMode?: OverlayMode;
   hotkey?: string;
   micName?: string;
+  isSuccess?: boolean;
+  errorMessage?: string;
+  warningMessage?: string;
 }
 
 const VIZ_WIDTH = 440;
@@ -33,6 +36,9 @@ export function RecordingPill({
   overlayMode = "Full",
   hotkey,
   micName,
+  isSuccess,
+  errorMessage,
+  warningMessage,
 }: RecordingPillProps) {
   const lastAmplitudesRef = useRef<number[]>([]);
 
@@ -52,6 +58,17 @@ export function RecordingPill({
   const vizHeight = isMini ? MINI_HEIGHT : VIZ_HEIGHT;
 
   const renderVisualization = () => {
+    if (isSuccess) {
+      return (
+        <div className="flex items-center justify-center h-full gap-3 text-green-600 dark:text-green-500">
+          <svg className={`animate-in zoom-in duration-300 ${isMini ? "w-6 h-6" : "w-10 h-10"}`} fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+          {!isMini && <span className="text-xl font-bold tracking-tight">Transcription Complete</span>}
+        </div>
+      );
+    }
+
     if (isRecording) {
       return (
         <VizComponent
@@ -92,7 +109,10 @@ export function RecordingPill({
   }
 
   return (
-    <div className="rounded-2xl bg-[#f6f6f6]/95 dark:bg-[#2b2b2f]/[0.97] backdrop-blur-3xl backdrop-saturate-150 flex flex-col shadow-lg border border-black/[0.1] dark:border-white/[0.1] overflow-hidden">
+    <div className={`rounded-2xl transition-all duration-500 bg-[#f6f6f6]/95 dark:bg-[#2b2b2f]/[0.97] backdrop-blur-3xl backdrop-saturate-150 flex flex-col shadow-lg border ${isSuccess
+      ? "border-green-500 dark:border-green-500/50 shadow-green-500/10"
+      : "border-black/[0.1] dark:border-white/[0.1]"
+      } overflow-hidden`}>
       {/* Visualization area */}
       <div
         style={{ width: VIZ_WIDTH, height: VIZ_HEIGHT }}
@@ -104,7 +124,7 @@ export function RecordingPill({
       {/* Bottom toolbar */}
       <div className="flex items-center justify-between px-4 py-2.5 border-t border-black/[0.06] dark:border-white/[0.06] mt-2">
         {/* Left: mic info */}
-        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs">
+        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs text-nowrap truncate max-w-[180px]">
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
           </svg>
@@ -113,6 +133,16 @@ export function RecordingPill({
 
         {/* Right: action labels + hotkey badges */}
         <div className="flex items-center gap-3 text-xs">
+          {errorMessage && (
+            <span className="text-red-600 dark:text-red-500 font-medium truncate max-w-[220px]">
+              {errorMessage}
+            </span>
+          )}
+          {!errorMessage && warningMessage && (
+            <span className="text-yellow-700 dark:text-yellow-400 font-medium truncate max-w-[220px]">
+              {warningMessage}
+            </span>
+          )}
           {isRecording && (
             <>
               <span className="text-gray-700 dark:text-gray-300">Stop</span>
@@ -121,6 +151,9 @@ export function RecordingPill({
           )}
           {isProcessing && (
             <span className="text-yellow-600 dark:text-yellow-400 font-medium">Processing...</span>
+          )}
+          {isSuccess && (
+            <span className="text-green-600 dark:text-green-500 font-medium animate-pulse">Done!</span>
           )}
           <span className="text-gray-500 dark:text-gray-400">Cancel</span>
           <span className="kbd">esc</span>

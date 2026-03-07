@@ -77,3 +77,14 @@ pub enum DownloadStatus {
     },
     Error { message: String },
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadProgress {
+    pub model_id: String,
+    pub percent: f32,
+    pub bytes_downloaded: u64,
+    pub bytes_total: u64,
+    pub bytes_per_second: u64,
+    pub eta_seconds: Option<u64>,
+}
