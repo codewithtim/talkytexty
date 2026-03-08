@@ -22,6 +22,12 @@ pub struct UserPreferences {
     #[serde(default)]
     pub selected_audio_device: Option<String>,
     pub launch_at_login: bool,
+    #[serde(default = "default_true")]
+    pub remove_filler_words: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -212,6 +218,7 @@ impl Default for UserPreferences {
             overlay_custom_position: None,
             selected_audio_device: None,
             launch_at_login: false,
+            remove_filler_words: true,
         }
     }
 }

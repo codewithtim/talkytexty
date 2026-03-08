@@ -226,6 +226,19 @@ pub async fn stop_recording(
             .map_err(|e| CommandError::new("TranscriptionFailed", e))?
     };
 
+    // Post-process: remove filler words if enabled
+    let text = {
+        let prefs = state
+            .preferences
+            .read()
+            .map_err(|e| CommandError::new("LockError", e.to_string()))?;
+        if prefs.remove_filler_words {
+            crate::transcription::postprocess::remove_filler_words(&text)
+        } else {
+            text
+        }
+    };
+
     let duration_ms = start_time.elapsed().as_millis() as u64;
 
     let _ = on_event.send(AudioEvent::TranscriptionCompleted {

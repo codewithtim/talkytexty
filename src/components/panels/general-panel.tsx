@@ -321,6 +321,18 @@ export function GeneralPanel() {
               : "Simulated Keystrokes"}
           </span>
         </SettingsRow>
+        <SettingsRow label="Remove Filler Words" description="Strip um, uh, hmm, and other fillers from transcriptions">
+          <ToggleSwitch
+            checked={preferences?.removeFillerWords ?? true}
+            onChange={async () => {
+              if (!preferences) return;
+              await updatePreferences({
+                ...preferences,
+                removeFillerWords: !preferences.removeFillerWords,
+              });
+            }}
+          />
+        </SettingsRow>
       </SettingsGroup>
 
       {/* Overlay Mode */}

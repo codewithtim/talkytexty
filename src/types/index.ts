@@ -100,6 +100,7 @@ export interface UserPreferences {
   overlayCustomPosition: OverlayCustomPosition | null;
   selectedAudioDevice: string | null;
   launchAtLogin: boolean;
+  removeFillerWords: boolean;
 }
 
 export type RecordingMode = "PushToTalk" | "Toggle";

@@ -50,6 +50,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 
 # Utilities
+regex = "1"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 log = "0.4"
